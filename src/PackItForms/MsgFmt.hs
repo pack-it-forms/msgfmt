@@ -69,12 +69,8 @@ parseFile f = do
     s <- readFile f
     return $ parse s
 
-valueFromMaybe          :: Maybe String -> String
-valueFromMaybe (Just s) = s
-valueFromMaybe Nothing  = ""
-
-getValue                     :: MsgFmt -> String -> String
-getValue (MsgFmt m _) k = valueFromMaybe $ M.lookup k m
+getValue :: MsgFmt -> String -> Maybe String
+getValue (MsgFmt m _) k = M.lookup k m
 
 getText :: MsgFmt -> T.Text
 getText (MsgFmt _ s) = s

@@ -13,6 +13,7 @@ import PackItForms.MsgFmt
 
 import Data.String.Utils
 import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 
 -- 1: Filename
@@ -276,7 +277,7 @@ getValueIsValueProperty :: [(String,String)] -> Property
 getValueIsValueProperty v = verifyNonEmptyList v ==>
    let p = insertAll v emptyRep
        stripKeys = map (\(x,y) -> (strip x, y))
-   in and $ map (\(x,y) -> getValue p x == (strip y)) $
+   in and $ map (\(x,y) -> (fromMaybe "" . getValue p) x == (strip y)) $
                 (M.toList . M.fromList . stripKeys) v
 
 getValueIsValue :: TestTree
