@@ -1,5 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-|
+Module      : MsgFmt
+Description : Raw pack-it-forms message handling
+Copyright   : (c) 2015 Peter Amidon <peter@picnicpark.org>
+            : (c) 2015 Keith Amidon <amidon@picnicpark.org>
+
+Generic handling of pack-it-forms encoded forms, which are also
+compatible with PacFORMS encoded forms.  Forms consist of a set of key
+value pairs representing the form fields.  All field names and values
+are strings to allow this module to provide basic functionality for
+any form.  It is expected that type-safe modules will be built on top
+of this module for specific forms that require automated processing.
+-}
+
 module PackItForms.MsgFmt
 ( parse
 , parseFile
