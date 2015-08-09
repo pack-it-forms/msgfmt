@@ -27,6 +27,7 @@ module PackItForms.MsgFmt
 
 import System.IO
 import qualified Data.Map as M
+import Data.Maybe
 import qualified Data.Text as T
 import Data.String.Utils
 
@@ -87,12 +88,9 @@ parse p = MsgFmt (parseMap M.empty "" $ stripUnnecessary p) $ T.pack p
 
 -- Skip comment and directive lines
 stripUnnecessary :: String -> String
-stripUnnecessary = unlines . filter (\x -> not ((headEqual '#' x) || (headEqual '!' x))) . lines
-
--- Test that the head of a list is equal to a given value
-headEqual :: Eq a => a -> [a] -> Bool
-headEqual _ [] = False
-headEqual a (x:_) = a == x
+stripUnnecessary = unlines . filter pred . lines
+  where pred = fromMaybe True . fmap notComment . listToMaybe
+        notComment = not . (`elem` ("#!" ::String))
 
 -- Create map of key/value pairs for each field
 parseMap :: M.Map String String -> String -> String -> M.Map String String
