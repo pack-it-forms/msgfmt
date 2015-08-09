@@ -18,12 +18,14 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     PackItForms.MsgFmt
+                     , PackItForms.ICS213
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base       >= 4.7     && <4.8
+  build-depends:       MissingH   >= 1.2.1.0 && < 1.3
+                     , base       >= 4.8     && < 4.9
                      , containers >= 0.5.5.1 && < 0.6
                      , text       >= 0.11    && < 2.0
-                     , MissingH   >= 1.2.1.0 && < 1.3
+                     , time >= 1.4.2
   hs-source-dirs:      src/
   default-language:    Haskell2010
 
@@ -31,14 +33,14 @@ test-suite test
   type:                exitcode-stdio-1.0
   main-is:             main.hs
   hs-source-dirs:      tests
-  build-depends:       base
+  build-depends:       Cabal            >= 1.18
+                     , MissingH         >= 1.2.1.0 && < 1.3
+                     , QuickCheck       >= 2.7.6   && < 2.8
+                     , base
+                     , containers       >= 0.5.5.1 && < 0.6
                      , pack-it-forms-msgfmt
                      , tasty            >= 0.8
                      , tasty-hunit      >=0.9
                      , tasty-quickcheck >= 0.8.1
-                     , QuickCheck       >= 2.7.6   && < 2.8
                      , text             >= 0.11    && < 2.0
-                     , containers       >= 0.5.5.1 && < 0.6
-                     , Cabal            >= 1.18
-                     , MissingH         >= 1.2.1.0 && < 1.3
   default-language:    Haskell2010
