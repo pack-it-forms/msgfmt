@@ -61,10 +61,9 @@ quoteValue s = backtickQuote "`]#!" s
 
 -- Backtick quoting function
 backtickQuote :: String -> String -> String
-backtickQuote _ "" = ""
-backtickQuote d (x:xs)
-  | x `elem` d = '`' : x : backtickQuote d xs
-  | otherwise = x : backtickQuote d xs
+backtickQuote d = foldr step ""
+  where step y acc | y `elem` d = '`':y:acc
+                   | otherwise = y:acc
 
 -- Encode a key/value pair in the text representation
 encodeKV     :: String -> String -> T.Text
