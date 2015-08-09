@@ -46,11 +46,10 @@ emptyRep :: MsgFmt
 emptyRep = MsgFmt M.empty ""
 
 -- | Add a field key/value pair to a message
-insertKV :: String -> String -> MsgFmt ->  MsgFmt
-insertKV k v (MsgFmt m s) = let nis = encodeKV (quoteKey k) (quoteValue v)
-                                    in MsgFmt
-                                         (M.insert (strip k) (strip v) m)
-                                         (T.append s nis)
+insertKV :: MsgFmt -> String -> String ->  MsgFmt
+insertKV (MsgFmt m s) k v =
+  let nis = encodeKV (quoteKey k) (quoteValue v)
+   in MsgFmt (M.insert (strip k) (strip v) m) (T.append s nis)
 
 -- Backtick escape invalid characters in encoded field names
 quoteKey   :: String -> String
@@ -72,11 +71,10 @@ encodeKV     :: String -> String -> T.Text
 encodeKV k v = T.pack $ k ++ ": [" ++ v ++ "]\n"
 
 -- | Add a list of field key/value pairs to message
-insertAll :: [(String,String)] -> MsgFmt ->  MsgFmt
-insertAll [] p = p
-insertAll ((k,v):kvs) p = insertAll kvs (insertKV k v p)
+insertAll :: MsgFmt -> [(String, String)] -> MsgFmt
+insertAll = foldl $ uncurry . insertKV
 
--- | Parse the encoded form message to a MsgFmt
+-- | Parse an encoded form message to a MsgFmt
 --
 -- Delimiters are considered :, [ and ].  : ends a key, [ starts a
 -- value, and ] ends a value.  In all components, a backtick followed
