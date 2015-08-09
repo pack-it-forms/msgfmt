@@ -30,25 +30,53 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.String.Utils
 
--- #####################
--- # Parsing functions #
--- #####################
+-- | Representation of a message
+data MsgFmt = MsgFmt (M.Map String String) T.Text
 
--- These functions split an backtick-escaped string at the first instance of the delimiter that they see.
--- Delimiter -> value -> result
-splitEF' :: Bool -> Char -> String -> (String,String)
-splitEF' _ _ []           = ("","")
-splitEF' False d ('`':xs) = let rest = splitEF' True  d xs
-                            in rest
-splitEF' b d (x:xs)
-  | not b && d == x       = ("",xs)
-  | otherwise             = let rest = splitEF' False d xs
-                            in ((x : fst rest), snd rest)
+-- | Accessor for value for a field in the message
+getValue :: MsgFmt -> String -> Maybe String
+getValue (MsgFmt m _) k = M.lookup k m
 
-splitEF     :: Char -> String -> (String, String)
-splitEF d s = splitEF' False d s
+-- | Accessor for the encoded form message text
+getText :: MsgFmt -> T.Text
+getText (MsgFmt _ s) = s
 
--- Behavioral documentation:
+-- | Create an empty message
+emptyRep :: MsgFmt
+emptyRep = MsgFmt M.empty ""
+
+-- | Add a field key/value pair to a message
+insertKV :: String -> String -> MsgFmt ->  MsgFmt
+insertKV k v (MsgFmt m s) = let nis = encodeKV (quoteKey k) (quoteValue v)
+                                    in MsgFmt
+                                         (M.insert (strip k) (strip v) m)
+                                         (T.append s nis)
+
+-- Backtick escape invalid characters in encoded field names
+quoteKey   :: String -> String
+quoteKey s = backtickQuote "`:#!" s
+
+-- Backtick escape invalid characters in encoded field values
+quoteValue   :: String -> String
+quoteValue s = backtickQuote "`]#!" s
+
+-- Backtick quoting function
+backtickQuote :: String -> String -> String
+backtickQuote _ "" = ""
+backtickQuote d (x:xs)
+  | x `elem` d = '`' : x : backtickQuote d xs
+  | otherwise = x : backtickQuote d xs
+
+-- Encode a key/value pair in the text representation
+encodeKV     :: String -> String -> T.Text
+encodeKV k v = T.pack $ k ++ ": [" ++ v ++ "]\n"
+
+-- | Add a list of field key/value pairs to message
+insertAll :: [(String,String)] -> MsgFmt ->  MsgFmt
+insertAll [] p = p
+insertAll ((k,v):kvs) p = insertAll kvs (insertKV k v p)
+
+-- | Parse the encoded form message to a MsgFmt
 --
 -- Delimiters are considered :, [ and ].  : ends a key, [ starts a
 -- value, and ] ends a value.  In all components, a backtick followed
@@ -57,8 +85,20 @@ splitEF d s = splitEF' False d s
 -- be named "k:ey".  Anything between delimiters is ignored; notably,
 -- any characters between the colon that ends a key and the first
 -- unescaped begin bracket will be ignored.
+parse   :: String -> MsgFmt
+parse p = MsgFmt (parseMap M.empty "" $ stripUnnecessary p) $ T.pack p
 
-parseMap                   :: M.Map String String -> String -> String -> M.Map String String
+-- Skip comment and directive lines
+stripUnnecessary :: String -> String
+stripUnnecessary = unlines . filter (\x -> not ((headEqual '#' x) || (headEqual '!' x))) . lines
+
+-- Test that the head of a list is equal to a given value
+headEqual :: Eq a => a -> [a] -> Bool
+headEqual _ [] = False
+headEqual a (x:_) = a == x
+
+-- Create map of key/value pairs for each field
+parseMap :: M.Map String String -> String -> String -> M.Map String String
 parseMap parsed _ ""     = parsed
 parseMap parsed key string = if key == ""
                                 then let (k,ks) = splitEF ':' string
@@ -68,61 +108,23 @@ parseMap parsed key string = if key == ""
                                          submap = parseMap parsed "" vs
                                      in M.insert key (strip nv) submap
 
-headEqual :: Eq a => a -> [a] -> Bool
-headEqual _ [] = False
-headEqual a (x:_) = a == x
+-- Split keys from values
+splitEF :: Char -> String -> (String, String)
+splitEF d s = splitEF' False d s
 
-stripUnnecessary :: String -> String
-stripUnnecessary = unlines . filter (\x -> not ((headEqual '#' x) || (headEqual '!' x))) . lines
+-- Worker for splitting keys and values dequoting backticks
+splitEF' :: Bool -> Char -> String -> (String,String)
+splitEF' _ _ []           = ("","")
+splitEF' False d ('`':xs) = let rest = splitEF' True  d xs
+                            in rest
+splitEF' b d (x:xs)
+  | not b && d == x       = ("",xs)
+  | otherwise             = let rest = splitEF' False d xs
+                            in ((x : fst rest), snd rest)
 
-parse   :: String -> MsgFmt
-parse p = MsgFmt (parseMap M.empty "" $ stripUnnecessary p) $ T.pack p
 
+-- | Parse the encoded form message in a file into a MsgFmt
 parseFile   :: String -> IO MsgFmt
 parseFile f = do
     s <- readFile f
     return $ parse s
-
-getValue :: MsgFmt -> String -> Maybe String
-getValue (MsgFmt m _) k = M.lookup k m
-
-getText :: MsgFmt -> T.Text
-getText (MsgFmt _ s) = s
-
--- ########################
--- # Generation functions #
--- ########################
-
-backtickQuote :: String -> String -> String
-backtickQuote _ "" = ""
-backtickQuote d (x:xs)
-  | x `elem` d = '`' : x : backtickQuote d xs
-  | otherwise = x : backtickQuote d xs
-
-quoteKey   :: String -> String
-quoteKey s = backtickQuote "`:#!" s
-
-quoteValue   :: String -> String
-quoteValue s = backtickQuote "`]#!" s
-
-encodeKV     :: String -> String -> T.Text
-encodeKV k v = T.pack $ k ++ ": [" ++ v ++ "]\n"
-
-emptyRep :: MsgFmt
-emptyRep = MsgFmt M.empty ""
-
-insertKV :: String -> String -> MsgFmt ->  MsgFmt
-insertKV k v (MsgFmt m s) = let nis = encodeKV (quoteKey k) (quoteValue v)
-                                    in MsgFmt
-                                         (M.insert (strip k) (strip v) m)
-                                         (T.append s nis)
-
-insertAll :: [(String,String)] -> MsgFmt ->  MsgFmt
-insertAll [] p = p
-insertAll ((k,v):kvs) p = insertAll kvs (insertKV k v p)
-
--- #####################
--- # Shared data types #
--- #####################
-
-data MsgFmt = MsgFmt (M.Map String String) T.Text
