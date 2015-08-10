@@ -44,4 +44,6 @@ test-suite test
                      , tasty-quickcheck >= 0.8.1
                      , text             >= 0.11    && < 2.0
                      , time >= 1.4.2
+                     , pretty-show >= 1.6.8.2 && < 1.7
+                     , lens >= 4.12 && < 4.13
   default-language:    Haskell2010

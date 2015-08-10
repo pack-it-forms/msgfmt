@@ -1,0 +1,136 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleInstances #-}
+
+module PackItForms.ICS213Tests (ics213Tests) where
+
+import Control.Lens.Traversal (sequenceOf)
+import Control.Lens.Each (each)
+import Control.Monad (liftM)
+import qualified Data.Fixed as F
+import qualified Data.Map as Map
+import qualified Data.Set as S
+import Data.Time.Calendar (Day(ModifiedJulianDay))
+import Data.Time.LocalTime (TimeOfDay(TimeOfDay))
+import PackItForms.ICS213
+import Test.QuickCheck
+import Test.Tasty
+import Test.Tasty.QuickCheck as QC
+
+ics213Tests :: TestTree
+ics213Tests = testGroup "Tests for ICS 213 messages"
+  [localOption (QuickCheckTests 10000)
+   (QC.testProperty "ICS213 messages roundtrip through MsgFmt" prop_roundtrips)]
+
+prop_roundtrips :: Msg -> Property
+prop_roundtrips m = m === (fromMsgFmt $ toMsgFmt m)
+
+instance Arbitrary Msg where
+  arbitrary = do
+    h <- arbitrary
+    b <- arbitrary
+    f <- arbitrary
+    return $ Msg h b f
+
+instance Arbitrary Header where
+  arbitrary = do
+    stationRole <- elements [Nothing, Just Sender, Just Receiver]
+    myMsgNo <- if stationRole == Nothing
+                  then oneof [return . Left $ MissingField "MsgNo"
+                             ,liftM Right $ suchThat (resize 8 arbitrary) $
+                                                        not . null]
+                  else liftM Right $ suchThat (resize 8 arbitrary) $ not . null
+    otherMsgNo <- if stationRole == Nothing
+                     then return Nothing
+                     else liftM Just $ suchThat (resize 8 arbitrary) $
+                                         \x -> either
+                                                 (const True)
+                                                 (/=x) myMsgNo && not (null x)
+    formDate <- oneof [return . Left $ MissingField "1a."
+                      ,return . Left $ FieldParseError "1a."
+                      ,liftM Right arbitrary]
+    formTime <- oneof [return . Left $ MissingField "1b."
+                      ,return . Left $ FieldParseError "1b."
+                      ,liftM Right arbitrary]
+    severity <- oneof [return . Left $ MissingField "4."
+                      ,return . Left $ FieldParseError "4."
+                      ,liftM Right arbitrary]
+    handlingOrder <- oneof [return . Left $ MissingField "5."
+                           ,return . Left $ FieldParseError "5."
+                           ,liftM Right arbitrary]
+    requestTakeAction <- arbitrary
+    requestReply <- arbitrary
+    replyBy <- if requestReply == Just True
+                  then resize 20 arbitrary
+                  else return Nothing
+    isFyi <- arbitrary
+    toPosition <- oneof [return . Left $ MissingField "7."
+                        ,liftM Right $ resize 30 arbitrary]
+    toName <- resize 40 arbitrary
+    toLocation <- oneof [return . Left $ MissingField "9a."
+                        ,liftM Right $ resize 30 arbitrary]
+    toTelephone <- resize 12 arbitrary
+    fromPosition <- oneof [return . Left $ MissingField "8."
+                          ,liftM Right $ resize 30 arbitrary]
+    fromName <- resize 40 arbitrary
+    fromLocation <- oneof [return . Left $ MissingField "9b."
+                          ,liftM Right $ resize 30 arbitrary]
+    fromTelephone <- resize 12 arbitrary
+    subject <- oneof [return . Left $ MissingField "10."
+                     ,liftM Right $ resize 100 arbitrary]
+    reference <- resize 30 arbitrary
+    return Header{..}
+
+instance Arbitrary Day where
+  arbitrary = ModifiedJulianDay <$> choose (50000, 100000)
+
+instance Arbitrary TimeOfDay where
+  arbitrary = TimeOfDay <$> choose (0,23)
+                          <*> choose (0, 59) <*> arbitrary
+
+instance Arbitrary F.Pico where
+  arbitrary = liftM ((*10^12) . F.MkFixed) $ choose (0,59)
+
+instance Arbitrary Severity where
+  arbitrary = elements [Emergency, Urgent, OtherSeverity]
+
+instance Arbitrary HandlingOrder where
+  arbitrary = elements [Immediate, Priority, Routine]
+
+instance Arbitrary Body where
+  arbitrary = Map.fromList <$> (listOf
+                 $ sequenceOf each
+                      (suchThat (resize 20 arbitrary) (not . isICS213Field)
+                      ,resize 100 arbitrary))
+
+instance Arbitrary Footer where
+  arbitrary = do
+    actionTaken <- resize 100 arbitrary
+    ccDest <- arbitrary
+    commMethod <- oneof [return . Left $ MissingField "Method"
+                        ,liftM Right arbitrary]
+    opCall <- oneof [return .Left $ MissingField "OpCall"
+                    ,liftM Right $ suchThat (resize 8 arbitrary) $ not . null]
+    opName <- oneof [return . Left $ MissingField "OpName"
+                    ,liftM Right $ suchThat (resize 30 arbitrary) $ not . null]
+    opDate <- oneof [return . Left $ MissingField "OpDate"
+                    ,return . Left $ FieldParseError "OpDate"
+                    ,liftM Right arbitrary]
+    opTime <- oneof [return . Left $ MissingField "OpTime"
+                    ,return . Left $ FieldParseError "OpTime"
+                    ,liftM Right arbitrary]
+    return Footer{..}
+
+instance Arbitrary (S.Set CopyDest) where
+  arbitrary = liftM S.fromList $
+                sublistOf [Management, Operations, Planning, Logistics, Finance]
+
+instance Arbitrary CommMethod where
+  arbitrary = oneof [return Telephone
+                    ,return DispatchCenter
+                    ,return EOCRadio
+                    ,return FAX
+                    ,return Courier
+                    ,return AmateurRadio
+                    ,liftM Other arbitrary]
+
