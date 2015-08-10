@@ -20,6 +20,7 @@ module PackItForms.MsgFmt
 , getValue
 , getText
 , emptyRep
+, fromList
 , insertKV
 , insertAll
 , MsgFmt(..)
@@ -45,6 +46,10 @@ getText (MsgFmt _ s) = s
 -- | Create an empty message
 emptyRep :: MsgFmt
 emptyRep = MsgFmt M.empty ""
+
+-- | Create a message from a list of field key/value pairs
+fromList :: [(String, String)] -> MsgFmt
+fromList = insertAll emptyRep
 
 -- | Add a field key/value pair to a message
 insertKV :: MsgFmt -> String -> String ->  MsgFmt

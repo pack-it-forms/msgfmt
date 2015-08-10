@@ -260,7 +260,7 @@ verifyNonEmptyList v = let ns = null . strip
 
 generateAndParseAreInversesProperty :: [(String,String)] -> Property
 generateAndParseAreInversesProperty v = verifyNonEmptyList v ==>
-  let MsgFmt gm gs = insertAll emptyRep v
+  let MsgFmt gm gs = fromList v
       MsgFmt em es = parse $ T.unpack $ gs
       strippedV         = map (\(x,y) -> (strip x, strip y)) v
       reversedStrippedV = reverse strippedV
@@ -275,7 +275,7 @@ generateAndParseAreInverses = localOption (QuickCheckTests 5000) $
 
 getValueIsValueProperty :: [(String,String)] -> Property
 getValueIsValueProperty v = verifyNonEmptyList v ==>
-   let p = insertAll emptyRep v
+   let p = fromList v
        stripKeys = map (\(x,y) -> (strip x, y))
    in and $ map (\(x,y) -> (fromMaybe "" . getValue p) x == (strip y)) $
                 (M.toList . M.fromList . stripKeys) v
