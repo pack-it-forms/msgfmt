@@ -55,7 +55,7 @@ fromList = insertAll emptyRep
 insertKV :: MsgFmt -> String -> String ->  MsgFmt
 insertKV (MsgFmt m s) k v =
   let nis = encodeKV (quoteKey k) (quoteValue v)
-   in MsgFmt (M.insert (strip k) (strip v) m) (T.append s nis)
+   in MsgFmt (M.insert k v m) (T.append s nis)
 
 -- Backtick escape invalid characters in encoded field names
 quoteKey   :: String -> String
@@ -102,11 +102,15 @@ parseMap :: M.Map String String -> String -> String -> M.Map String String
 parseMap parsed _ ""     = parsed
 parseMap parsed key string = if key == ""
                                 then let (k,ks) = splitEF ':' string
-                                     in parseMap parsed (strip k) ks
+                                     in parseMap parsed (stripKey k) ks
                                 else let (_,v) = splitEF '[' string
                                          (nv,vs) = splitEF ']' v
                                          submap = parseMap parsed "" vs
-                                     in M.insert key (strip nv) submap
+                                     in M.insert key nv submap
+  -- stripKey is used to get rid of the newline that might be at the
+  -- beginning of some keys
+  where stripKey ('\n':xs) = xs
+        stripKey x = x
 
 -- Split keys from values
 splitEF :: Char -> String -> (String, String)

@@ -259,14 +259,15 @@ verifyNonEmptyList v = let ns = null . strip
                        in and vt
 
 generateAndParseAreInversesProperty :: [(String,String)] -> Property
-generateAndParseAreInversesProperty v = verifyNonEmptyList v ==>
+generateAndParseAreInversesProperty v = verifyInput v ==>
   let MsgFmt gm gs = fromList v
       MsgFmt em es = parse $ T.unpack $ gs
-      strippedV         = map (\(x,y) -> (strip x, strip y)) v
-      reversedStrippedV = reverse strippedV
-  in (em == M.fromList reversedStrippedV)
-     && (gm == M.fromList strippedV)
+  in (em == M.fromList (reverse v))
+     && (gm == M.fromList v)
      && (es == gs)
+  -- Ensure that keys with a newline as the first character do not get
+  -- generated, and that there is at least one key-value pair.
+  where verifyInput v = verifyNonEmptyList v && all (('\n'/=) . head . fst) v
 
 generateAndParseAreInverses :: TestTree
 generateAndParseAreInverses = localOption (QuickCheckTests 5000) $
@@ -276,9 +277,8 @@ generateAndParseAreInverses = localOption (QuickCheckTests 5000) $
 getValueIsValueProperty :: [(String,String)] -> Property
 getValueIsValueProperty v = verifyNonEmptyList v ==>
    let p = fromList v
-       stripKeys = map (\(x,y) -> (strip x, y))
-   in and $ map (\(x,y) -> (fromMaybe "" . getValue p) x == (strip y)) $
-                (M.toList . M.fromList . stripKeys) v
+   in and $ map (\(x,y) -> (fromMaybe "" . getValue p) x == y) $
+                (M.toList . M.fromList) v
 
 getValueIsValue :: TestTree
 getValueIsValue = localOption (QuickCheckTests 5000) $
