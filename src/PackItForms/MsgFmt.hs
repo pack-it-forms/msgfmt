@@ -63,12 +63,12 @@ insertKV (MsgFmt m s) k v =
    in MsgFmt (M.insert k v m) (T.append s nis)
 
 -- Backtick escape invalid characters in encoded field names
-quoteKey   :: String -> String
-quoteKey s = backtickQuote "`:#!" s
+quoteKey :: String -> String
+quoteKey = backtickQuote "`:#!"
 
 -- Backtick escape invalid characters in encoded field values
-quoteValue   :: String -> String
-quoteValue s = backtickQuote "`]#!" s
+quoteValue :: String -> String
+quoteValue = backtickQuote "`]#!"
 
 -- Backtick quoting function
 backtickQuote :: String -> String -> String
@@ -99,7 +99,7 @@ parse p = MsgFmt (parseMap M.empty "" $ stripUnnecessary p) $ T.pack p
 -- Skip comment and directive lines
 stripUnnecessary :: String -> String
 stripUnnecessary = unlines . filter pred . lines
-  where pred = fromMaybe True . fmap notComment . listToMaybe
+  where pred = maybe True notComment . listToMaybe
         notComment = not . (`elem` ("#!" ::String))
 
 -- Create map of key/value pairs for each field
@@ -119,7 +119,7 @@ parseMap parsed key string = if key == ""
 
 -- Split keys from values
 splitEF :: Char -> String -> (String, String)
-splitEF d s = splitEF' False d s
+splitEF = splitEF' False
 
 -- Worker for splitting keys and values dequoting backticks
 splitEF' :: Bool -> Char -> String -> (String,String)
@@ -129,7 +129,7 @@ splitEF' False d ('`':xs) = let rest = splitEF' True  d xs
 splitEF' b d (x:xs)
   | not b && d == x       = ("",xs)
   | otherwise             = let rest = splitEF' False d xs
-                            in ((x : fst rest), snd rest)
+                            in (x : fst rest, snd rest)
 
 
 -- | Parse the encoded form message in a file into a MsgFmt

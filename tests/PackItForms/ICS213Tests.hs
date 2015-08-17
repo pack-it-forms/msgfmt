@@ -7,6 +7,7 @@ module PackItForms.ICS213Tests (ics213Tests) where
 import Control.Lens.Traversal (sequenceOf)
 import Control.Lens.Each (each)
 import Control.Monad (liftM)
+import Data.Maybe (isNothing, isJust)
 import qualified Data.Fixed as F
 import qualified Data.Map as Map
 import qualified Data.Set as S
@@ -23,7 +24,7 @@ ics213Tests = testGroup "Tests for ICS 213 messages"
    (QC.testProperty "ICS213 messages roundtrip through MsgFmt" prop_roundtrips)]
 
 prop_roundtrips :: Msg -> Property
-prop_roundtrips m = m === (fromMsgFmt $ toMsgFmt m)
+prop_roundtrips m = m === fromMsgFmt (toMsgFmt m)
 
 instance Arbitrary Msg where
   arbitrary = do
@@ -35,12 +36,12 @@ instance Arbitrary Msg where
 instance Arbitrary Header where
   arbitrary = do
     stationRole <- elements [Nothing, Just Sender, Just Receiver]
-    myMsgNo <- if stationRole == Nothing
+    myMsgNo <- if isNothing stationRole
                   then oneof [return . Left $ MissingField "MsgNo"
                              ,liftM Right $ suchThat (resize 8 arbitrary) $
                                                         not . null]
                   else liftM Right $ suchThat (resize 8 arbitrary) $ not . null
-    otherMsgNo <- if stationRole == Nothing
+    otherMsgNo <- if isNothing stationRole
                      then return Nothing
                      else liftM Just $ suchThat (resize 8 arbitrary) $
                                          \x -> either
@@ -98,10 +99,11 @@ instance Arbitrary HandlingOrder where
   arbitrary = elements [Immediate, Priority, Routine]
 
 instance Arbitrary Body where
-  arbitrary = Map.fromList <$> (listOf
-                 $ sequenceOf each
-                      (suchThat (resize 20 arbitrary) (not . isICS213Field)
-                      ,resize 100 arbitrary))
+  arbitrary = Map.fromList <$>
+    listOf
+      (sequenceOf each
+         (suchThat (resize 20 arbitrary) (not . isICS213Field),
+          resize 100 arbitrary))
 
 instance Arbitrary Footer where
   arbitrary = do

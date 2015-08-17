@@ -35,7 +35,8 @@ module PackItForms.ICS213
        ,fromMsgFmt) where
 
 import qualified Data.Map as M
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (isJust, fromJust, fromMaybe)
+import Control.Monad (liftM)
 import qualified Data.Set as S
 import Data.Time.Calendar (Day)
 import Data.Time.LocalTime (TimeOfDay)
@@ -205,7 +206,7 @@ fromMsgFmt m = Msg header body footer
                         , subject = fldR "10."
                         , reference = fld "11." }
         body = M.filterWithKey
-                 (\k -> \_ -> not $ isICS213Field k) $ MF.getMap m
+                 (\k _ -> not $ isICS213Field k) $ MF.getMap m
         footer = Footer { actionTaken = fld "13."
                         , ccDest = copies
                         , commMethod = method
@@ -218,10 +219,10 @@ fromMsgFmt m = Msg header body footer
         fldR x = case fld x of
                    Nothing -> Left $ MissingField x
                    Just y -> Right y
-        role | n /= Nothing && r == n = Just Receiver
-             | n /= Nothing && s == n = Just Sender
-             | s /= Nothing = Just Receiver
-             | r /= Nothing = Just Sender
+        role | isJust n && r == n = Just Receiver
+             | isJust n && s == n = Just Sender
+             | isJust s = Just Receiver
+             | isJust r = Just Sender
              | otherwise = Nothing
            where s = fld "2."
                  r = fld "3."
@@ -231,9 +232,9 @@ fromMsgFmt m = Msg header body footer
               | otherwise = Nothing
         formD = fldR "1a." >>= maybe (Left $ FieldParseError "1a.") Right
                                 . parseTimeM True defaultTimeLocale "%m/%d/%Y"
-        formT = fldR "1b." >>= \x -> case (parseTimeM True defaultTimeLocale "%T" x) of
+        formT = fldR "1b." >>= \x -> case parseTimeM True defaultTimeLocale "%T" x of
                 Just t -> Right t
-                Nothing -> case (parseTimeM True defaultTimeLocale "%H:%M" x) of
+                Nothing -> case parseTimeM True defaultTimeLocale "%H:%M" x of
                              Just t -> Right t
                              Nothing -> Left $ FieldParseError "1b."
         sev = fldR "4." >>= \x -> case x of
@@ -265,27 +266,27 @@ fromMsgFmt m = Msg header body footer
                               ,("CCFin", Finance)]
         opD = fldR "OpDate" >>= maybe (Left $ FieldParseError "OpDate") Right
                                 . parseTimeM True defaultTimeLocale "%m/%d/%Y"
-        opT = fldR "OpTime" >>= \x -> case (parseTimeM True defaultTimeLocale "%T" x) of
+        opT = fldR "OpTime" >>= \x -> case parseTimeM True defaultTimeLocale "%T" x of
                 Just t -> Right t
-                Nothing -> case (parseTimeM True defaultTimeLocale "%H:%M" x) of
+                Nothing -> case parseTimeM True defaultTimeLocale "%H:%M" x of
                              Just t -> Right t
                              Nothing -> Left $ FieldParseError "OpTime"
 
 -- | Test whether a message was recieved
 received :: Msg -> Bool
 received m | stationRole h == Just Receiver = True
-           | otherMsgNo h /= Nothing = True
+           | isJust (otherMsgNo h) = True
            | otherwise = False
        where (Msg h _ _) = m
 
 toMsgFmt :: Msg -> MF.MsgFmt
-toMsgFmt m =  MF.fromList $ g3
+toMsgFmt m =  MF.fromList g3
   where (Msg h b f) = m
         locale = defaultTimeLocale
-        genFlds f i acc = fromMaybe acc . fmap (\x -> (i, x):acc) $ f i
+        genFlds f i acc = maybe acc (\x -> (i, x):acc) $ f i
         g1 = foldr (genFlds ftrVal) [] footerFields
-        ftrVal "OpTime" = eitherToMaybe $ opTime f >>= return . formatTime locale "%T"
-        ftrVal "OpDate" = eitherToMaybe $ opDate f >>= return . formatTime locale "%m/%d/%Y"
+        ftrVal "OpTime" = eitherToMaybe $ liftM (formatTime locale "%T") (opTime f)
+        ftrVal "OpDate" = eitherToMaybe $ liftM (formatTime locale "%m/%d/%Y") (opDate f)
         ftrVal "OpName" = eitherToMaybe $ opName f
         ftrVal "OpCall" = eitherToMaybe $ opCall f
         ftrVal "Other" = otherMethod $ commMethod f
@@ -300,18 +301,18 @@ toMsgFmt m =  MF.fromList $ g3
                             Right AmateurRadio -> Just "AmateurRadio"
                             Right (Other _) -> Just "Other"
                             otherwise -> Nothing
-        ftrVal "CCFin" = if Finance `S.member` (ccDest f)
+        ftrVal "CCFin" = if Finance `S.member` ccDest f
                             then Just "checked" else Nothing
-        ftrVal "CCLog" = if Logistics `S.member` (ccDest f)
+        ftrVal "CCLog" = if Logistics `S.member` ccDest f
                             then Just "checked" else Nothing
-        ftrVal "CCPlan" = if Planning `S.member` (ccDest f)
+        ftrVal "CCPlan" = if Planning `S.member` ccDest f
                             then Just "checked" else Nothing
-        ftrVal "CCOps" = if Operations `S.member` (ccDest f)
+        ftrVal "CCOps" = if Operations `S.member` ccDest f
                             then Just "checked" else Nothing
-        ftrVal "CCMgt" = if Management `S.member` (ccDest f)
+        ftrVal "CCMgt" = if Management `S.member` ccDest f
                             then Just "checked" else Nothing
         ftrVal "13." = actionTaken f
-        g2 = g1 ++ (M.toList b)
+        g2 = g1 ++ M.toList b
         g3 = foldr (genFlds hdrVal) g2 headerFields
         hdrVal "11." = reference h
         hdrVal "10." = eitherToMaybe $ subject h
@@ -355,8 +356,8 @@ toMsgFmt m =  MF.fromList $ g3
         hdrVal "2." = case stationRole h of
                         Just Receiver -> otherMsgNo h
                         otherwise -> Nothing
-        hdrVal "1b." = eitherToMaybe $ formTime h >>= return . formatTime locale "%T"
-        hdrVal "1a." = eitherToMaybe $ formDate h >>= return . formatTime locale "%m/%d/%Y"
+        hdrVal "1b." = eitherToMaybe $ liftM (formatTime locale "%T") (formTime h)
+        hdrVal "1a." = eitherToMaybe $ liftM (formatTime locale "%m/%d/%Y") (formDate h)
         eitherToMaybe x = case x of
                             Left (MissingField _) -> Nothing
                             Left _ -> Just ""

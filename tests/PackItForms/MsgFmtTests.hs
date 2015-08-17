@@ -21,7 +21,7 @@ import qualified Data.Text as T
 -- return: Assertion checking that they are true
 packItFormsMsgFmtTest       :: String -> M.Map String String -> Assertion
 packItFormsMsgFmtTest fn em = do
-  let filename = ("tests/PackItForms/data/msgs/" ++ fn)
+  let filename = "tests/PackItForms/data/msgs/" ++ fn
   c <- readFile filename
   let es = T.pack c
   let pfr = parse c
@@ -261,7 +261,7 @@ verifyNonEmptyList v = let ns = null . strip
 generateAndParseAreInversesProperty :: [(String,String)] -> Property
 generateAndParseAreInversesProperty v = verifyInput v ==>
   let MsgFmt gm gs = fromList v
-      MsgFmt em es = parse $ T.unpack $ gs
+      MsgFmt em es = parse $ T.unpack gs
   in (em == M.fromList (reverse v))
      && (gm == M.fromList v)
      && (es == gs)
@@ -271,18 +271,18 @@ generateAndParseAreInversesProperty v = verifyInput v ==>
 
 generateAndParseAreInverses :: TestTree
 generateAndParseAreInverses = localOption (QuickCheckTests 5000) $
-  testProperty "Generate and parse act as inverses" $
+  testProperty "Generate and parse act as inverses"
     generateAndParseAreInversesProperty
 
 getValueIsValueProperty :: [(String,String)] -> Property
 getValueIsValueProperty v = verifyNonEmptyList v ==>
    let p = fromList v
-   in and $ map (\(x,y) -> (fromMaybe "" . getValue p) x == y) $
-                (M.toList . M.fromList) v
+   in all (\(x,y) -> (fromMaybe "" . getValue p) x == y)
+          ((M.toList . M.fromList) v)
 
 getValueIsValue :: TestTree
 getValueIsValue = localOption (QuickCheckTests 5000) $
-  testProperty "getValue returns the correct value" $
+  testProperty "getValue returns the correct value"
     getValueIsValueProperty
 
 packItFormsMsgFmtTests :: TestTree
