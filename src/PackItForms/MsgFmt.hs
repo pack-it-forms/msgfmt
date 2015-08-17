@@ -19,6 +19,7 @@ module PackItForms.MsgFmt
 , parseFile
 , getValue
 , getText
+, getMap
 , emptyRep
 , fromList
 , insertKV
@@ -43,6 +44,9 @@ getValue (MsgFmt m _) k = M.lookup k m
 -- | Accessor for the encoded form message text
 getText :: MsgFmt -> T.Text
 getText (MsgFmt _ s) = s
+
+-- | Accessor to allow access to all of the fields as a map
+getMap (MsgFmt m _) = m
 
 -- | Create an empty message
 emptyRep :: MsgFmt
