@@ -34,6 +34,7 @@ import Data.String.Utils
 
 -- | Representation of a message
 data MsgFmt = MsgFmt (M.Map String String) T.Text
+  deriving (Show, Eq)
 
 -- | Accessor for value for a field in the message
 getValue :: MsgFmt -> String -> Maybe String
