@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, GADTs, StandaloneDeriving #-}
 
 {-|
 Module      : ICS213
@@ -25,7 +25,8 @@ module PackItForms.ICS213
        ,MsgNo
        ,Severity(..)
        ,HandlingOrder(..)
-       ,Body
+       ,ICS213Body(..)
+       ,CatchAllMapBody(..)
        ,CopyDest(..)
        ,CommMethod(..)
        ,FormatError(..)
@@ -47,8 +48,11 @@ import qualified PackItForms.MsgFmt as MF
 import GHC.Show
 
 -- | Full ICS213 message contents
-data Msg = Msg Header Body Footer
-  deriving (Show, Eq)
+data Msg a where
+  Msg :: ICS213Body a => Header -> a -> Footer -> Msg a
+
+deriving instance Eq a => Eq (Msg a)
+deriving instance Show a => Show (Msg a)
 
 -- | Header contents of an ICS213 message
 data Header = Header { stationRole :: Maybe StationRole
@@ -91,11 +95,26 @@ data HandlingOrder = Immediate | Priority | Routine
 -- | Body contents of the message
 --
 -- More specific message forms can be built around the basic structure
--- of the ICS213 form.  To make it easy for this to be done, the body
--- is stored as a map of (key, value) pairs.  A simple message with a
--- single free-form text field could be represented by a map with a
--- single key with an appropriate name like 'content'.
-type Body = M.Map String String
+-- of the ICS213 form.  This class represents types which can
+-- serialize/deserialize themselves into MsgFmts, and can therefore be
+-- used as bodies for ICS 213 forms.
+class ICS213Body a where
+  -- | Convert an MF.MsgFmt into a body
+  bodyFromMsgFmt :: MF.MsgFmt -> a
+  -- | Convert a body into an MF.MsgFmt
+  bodyToMsgFmt :: a -> MF.MsgFmt
+
+-- | Default catch-all instance for the ICS213Body class.  This simply
+-- puts all of the fields that aren't header or footer fields into a
+-- map in 'bodyFromMsgFmt' and extracts them back into a MsgFmt in
+-- 'bodyToMsgFmt'
+data CatchAllMapBody = CatchAllMapBody (M.Map String String) deriving (Eq, Show)
+
+instance ICS213Body CatchAllMapBody where
+  bodyFromMsgFmt m = CatchAllMapBody $
+    M.filterWithKey (\k _ -> not $ isICS213Field k) $ MF.getMap m
+  bodyToMsgFmt (CatchAllMapBody b) = MF.fromList (M.toList b)
+
 
 -- | Footer contents of an ICS213 message
 data Footer = Footer { actionTaken :: Maybe String
@@ -162,7 +181,7 @@ data FormatError = MissingField String | FieldParseError String deriving (Show, 
 -- | Separate type for callsigns since they are important
 type CallSign = String
 
-getErrors :: Msg -> [FormatError]
+getErrors :: Msg a -> [FormatError]
 getErrors (Msg h b f) =
   foldl addError [] $ map ($ h) funcs
   where addError l (Left e) = e:l
@@ -173,7 +192,7 @@ getErrors (Msg h b f) =
                 , rr . handlingOrder, rr . toPosition, rr . toLocation
                 , rr . fromPosition, rr . fromLocation, rr . subject]
 
-fromMsgFmt :: MF.MsgFmt -> Msg
+fromMsgFmt :: ICS213Body a => MF.MsgFmt -> Msg a
 fromMsgFmt m = Msg header body footer
   where header = Header { stationRole = role
                         , myMsgNo = fldR "MsgNo"
@@ -205,8 +224,7 @@ fromMsgFmt m = Msg header body footer
                         , fromTelephone = fld "FmTel"
                         , subject = fldR "10."
                         , reference = fld "11." }
-        body = M.filterWithKey
-                 (\k _ -> not $ isICS213Field k) $ MF.getMap m
+        body = bodyFromMsgFmt m
         footer = Footer { actionTaken = fld "13."
                         , ccDest = copies
                         , commMethod = method
@@ -273,16 +291,15 @@ fromMsgFmt m = Msg header body footer
                              Nothing -> Left $ FieldParseError "OpTime"
 
 -- | Test whether a message was recieved
-received :: Msg -> Bool
+received :: Msg a -> Bool
 received m | stationRole h == Just Receiver = True
            | isJust (otherMsgNo h) = True
            | otherwise = False
        where (Msg h _ _) = m
 
-toMsgFmt :: Msg -> MF.MsgFmt
-toMsgFmt m =  MF.fromList g3
-  where (Msg h b f) = m
-        locale = defaultTimeLocale
+toMsgFmt :: Msg a -> MF.MsgFmt
+toMsgFmt m@(Msg h b f) =  MF.insertAll body g2
+  where locale = defaultTimeLocale
         genFlds f i acc = maybe acc (\x -> (i, x):acc) $ f i
         g1 = foldr (genFlds ftrVal) [] footerFields
         ftrVal "OpTime" = eitherToMaybe $ liftM (formatTime locale "%T") (opTime f)
@@ -312,8 +329,8 @@ toMsgFmt m =  MF.fromList g3
         ftrVal "CCMgt" = if Management `S.member` ccDest f
                             then Just "checked" else Nothing
         ftrVal "13." = actionTaken f
-        g2 = g1 ++ M.toList b
-        g3 = foldr (genFlds hdrVal) g2 headerFields
+        body = bodyToMsgFmt b
+        g2 = foldr (genFlds hdrVal) g1 headerFields
         hdrVal "11." = reference h
         hdrVal "10." = eitherToMaybe $ subject h
         hdrVal "FmTel" = fromTelephone h

@@ -23,10 +23,10 @@ ics213Tests = testGroup "Tests for ICS 213 messages"
   [localOption (QuickCheckTests 10000)
    (QC.testProperty "ICS213 messages roundtrip through MsgFmt" prop_roundtrips)]
 
-prop_roundtrips :: Msg -> Property
+prop_roundtrips :: Msg CatchAllMapBody -> Property
 prop_roundtrips m = m === fromMsgFmt (toMsgFmt m)
 
-instance Arbitrary Msg where
+instance (Arbitrary a, ICS213Body a) => Arbitrary (Msg a) where
   arbitrary = do
     h <- arbitrary
     b <- arbitrary
@@ -98,8 +98,8 @@ instance Arbitrary Severity where
 instance Arbitrary HandlingOrder where
   arbitrary = elements [Immediate, Priority, Routine]
 
-instance Arbitrary Body where
-  arbitrary = Map.fromList <$>
+instance Arbitrary CatchAllMapBody where
+  arbitrary = CatchAllMapBody <$> Map.fromList <$>
     listOf
       (sequenceOf each
          (suchThat (resize 20 arbitrary) (not . isICS213Field),
