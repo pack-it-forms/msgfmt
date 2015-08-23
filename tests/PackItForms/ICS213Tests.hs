@@ -14,6 +14,7 @@ import qualified Data.Set as S
 import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Data.Time.LocalTime (TimeOfDay(TimeOfDay))
 import PackItForms.ICS213
+import PackItForms.ParseUtils
 import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.QuickCheck as QC
