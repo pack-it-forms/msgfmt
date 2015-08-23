@@ -19,6 +19,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     PackItForms.MsgFmt
                      , PackItForms.ICS213
+                     , PackItForms.LADamage
                      , PackItForms.ParseUtils
   -- other-modules:       
   -- other-extensions:    
