@@ -13,8 +13,6 @@ License     : Apache-2
 Type-safe handling of information in the body of Los Altos damage
 forms, based on the ICS 213 message form handling support in
 'PackItForms.ICS213'
-
-TODO: * Add support for "rolling up" multiple status reports into one.
 -}
 
 module PackItForms.LADamage
@@ -37,7 +35,9 @@ module PackItForms.LADamage
        ,gasHazardCnt
        ,chemicalHazardCnt
        ,roadBlocked
-       ,BATNum(..)) where
+       ,BATNum(..)
+       ,rollupBATStatuses
+       ,addBATStatuses) where
 
 import Data.Char (isAlpha)
 import qualified Data.Map as M
@@ -158,3 +158,42 @@ instance ICS213.ICS213Body LADamageBody where
                                      Just True -> Just "checked"
                                      Just False -> Just ""
                                      _ -> Nothing
+
+-- | "Roll up" a list of BAT statuses into an aggregate status; values
+-- from later messages supresede values from earlier messages.  The
+-- number of the first BATStatus in the list is assumed to be the BAT
+-- for which statuses are being rolled up; if any other messages have
+-- a conflicting BAT number, they will be ignored.
+rollupBATStatuses :: [BATStatus] -> BATStatus
+rollupBATStatuses l = foldl1 addBATStatuses l
+
+-- | Add one BAT status record into another; this is intended to be
+-- used for incremental updating of aggregate statuses.  The semantics
+-- are the same as for 'rollupBATStatuses' above.
+addBATStatuses :: BATStatus -> BATStatus -> BATStatus
+
+-- The implementation of 'addBATStatuses' folds over a list of fields
+-- in order to allow (nearly) boilerplate-free implementation, and the
+-- easy addition of new fields.  Unfortunately, this list must,
+-- therefore, be a list of lenses; since lenses are polymorphic types,
+-- it is therefore necessary to use a newtype wrapper (such as the
+-- ones provided in "Control.Lens.Reified"); this is a similar type.
+-- Using this data type instead of the newtype wrappers in
+-- "Control.Lens.Reified", however, provides one significant
+-- advantage: by using existential types, it is possible to treat
+-- integer and boolean fields the same way, which makes the
+-- implementation of 'addBATStatuses' significantly simpler.
+data BATStatusLens = forall a. BSL (Lens' BATStatus (Maybe a))
+
+addBATStatuses old new = if old ^. number /= new ^. number
+                            then old
+                            else foldl (\x -> \(BSL y) -> addFld x y) old flds
+  where addFld :: BATStatus -> Lens' BATStatus (Maybe a) -> BATStatus
+        addFld s f = maybe s (\x -> s & f .~ Just x) $ new ^. f
+        flds :: [BATStatusLens]
+        flds = [ BSL okay, BSL minorInjuryCnt, BSL delayedInjuryCnt
+               , BSL immediateInjuryCnt, BSL fatalityCnt, BSL missingCnt
+               , BSL trappedCnt, BSL lightDamageCnt, BSL moderateDamageCnt
+               , BSL heavyDamageCnt, BSL fireCnt, BSL electricHazardCnt
+               , BSL waterHazardCnt, BSL gasHazardCnt, BSL chemicalHazardCnt
+               , BSL roadBlocked]
