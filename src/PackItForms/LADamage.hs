@@ -1,3 +1,8 @@
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-|
 Module      : LADamage
 Description : Los Altos Damage Form Message Handling
@@ -12,7 +17,27 @@ forms, based on the ICS 213 message form handling support in
 TODO: * Add support for "rolling up" multiple status reports into one.
 -}
 
-module PackItForms.LADamage (LADamageBody(..), BATStatus(..), BATNum(..)) where
+module PackItForms.LADamage
+       (LADamageBody(..)
+       ,BATStatus(..)
+       ,number
+       ,okay
+       ,minorInjuryCnt
+       ,delayedInjuryCnt
+       ,immediateInjuryCnt
+       ,fatalityCnt
+       ,missingCnt
+       ,trappedCnt
+       ,lightDamageCnt
+       ,moderateDamageCnt
+       ,heavyDamageCnt
+       ,fireCnt
+       ,electricHazardCnt
+       ,waterHazardCnt
+       ,gasHazardCnt
+       ,chemicalHazardCnt
+       ,roadBlocked
+       ,BATNum(..)) where
 
 import Data.Char (isAlpha)
 import qualified Data.Map as M
@@ -21,33 +46,37 @@ import qualified PackItForms.MsgFmt as MF
 import PackItForms.ParseUtils
 import qualified Data.Text as T
 import qualified Data.Either as E
+import Control.Lens
+import Control.Lens.TH
 
 -- | ICS213 form body for the Los Altos Damage Assessment form
 data LADamageBody = LADamageBody { statuses :: [BATStatus]
                                  , notes :: T.Text } deriving (Eq, Show)
 
 -- | BATStatus represents the status information for a BAT
-data BATStatus = BATStatus { number :: Either FormatError BATNum
-                            , okay :: Maybe Bool
-                            , minorInjuryCnt :: Maybe Integer
-                            , delayedInjuryCnt :: Maybe Integer
-                            , immediateInjuryCnt :: Maybe Integer
-                            , fatalityCnt :: Maybe Integer
-                            , missingCnt :: Maybe Integer
-                            , trappedCnt :: Maybe Integer
-                            , lightDamageCnt :: Maybe Integer
-                            , moderateDamageCnt :: Maybe Integer
-                            , heavyDamageCnt :: Maybe Integer
-                            , fireCnt :: Maybe Integer
-                            , electricHazardCnt :: Maybe Integer
-                            , waterHazardCnt :: Maybe Integer
-                            , gasHazardCnt :: Maybe Integer
-                            , chemicalHazardCnt :: Maybe Integer
-                            , roadBlocked :: Maybe Bool
+data BATStatus = BATStatus { _number :: Either FormatError BATNum
+                            , _okay :: Maybe Bool
+                            , _minorInjuryCnt :: Maybe Integer
+                            , _delayedInjuryCnt :: Maybe Integer
+                            , _immediateInjuryCnt :: Maybe Integer
+                            , _fatalityCnt :: Maybe Integer
+                            , _missingCnt :: Maybe Integer
+                            , _trappedCnt :: Maybe Integer
+                            , _lightDamageCnt :: Maybe Integer
+                            , _moderateDamageCnt :: Maybe Integer
+                            , _heavyDamageCnt :: Maybe Integer
+                            , _fireCnt :: Maybe Integer
+                            , _electricHazardCnt :: Maybe Integer
+                            , _waterHazardCnt :: Maybe Integer
+                            , _gasHazardCnt :: Maybe Integer
+                            , _chemicalHazardCnt :: Maybe Integer
+                            , _roadBlocked :: Maybe Bool
      } deriving (Eq, Show)
 
 -- | A type alias for BAT numbers
 type BATNum = Integer
+
+makeLensesWith lensRules ''BATStatus
 
 batStatusFields = ["a.batnum"
                   ,"b.ok"
@@ -73,23 +102,23 @@ instance ICS213.ICS213Body LADamageBody where
     where bodyFromMsgFmtWithFields fld fldE fldR
             = LADamageBody (filter nonEmpty $ map mkBatStatus [0..9]) (T.pack $ fldE "12.10.general-notes")
             where mkBatStatus n
-                    = BATStatus { number = batFldR "a.batnum"
-                                , okay = batFldB "b.ok"
-                                , minorInjuryCnt = batFld "c.people-minor"
-                                , delayedInjuryCnt = batFld "d.people-delayed"
-                                , immediateInjuryCnt = batFld "e.people-immediate"
-                                , fatalityCnt = batFld "f.people-V"
-                                , missingCnt = batFld "g.people-missing"
-                                , trappedCnt = batFld "h.people-trapped"
-                                , lightDamageCnt = batFld "i.damage-light"
-                                , moderateDamageCnt = batFld "j.damage-moderate"
-                                , heavyDamageCnt = batFld "k.damage-heavy"
-                                , fireCnt = batFld "l.hazards-fires-burning"
-                                , electricHazardCnt = batFld "m.hazards-electric"
-                                , waterHazardCnt = batFld "n.hazards-water"
-                                , gasHazardCnt = batFld "o.hazards-gas"
-                                , chemicalHazardCnt = batFld "p.hazards-chemical"
-                                , roadBlocked = batFldB "q.roads-no-access" }
+                    = BATStatus { _number = batFldR "a.batnum"
+                                , _okay = batFldB "b.ok"
+                                , _minorInjuryCnt = batFld "c.people-minor"
+                                , _delayedInjuryCnt = batFld "d.people-delayed"
+                                , _immediateInjuryCnt = batFld "e.people-immediate"
+                                , _fatalityCnt = batFld "f.people-V"
+                                , _missingCnt = batFld "g.people-missing"
+                                , _trappedCnt = batFld "h.people-trapped"
+                                , _lightDamageCnt = batFld "i.damage-light"
+                                , _moderateDamageCnt = batFld "j.damage-moderate"
+                                , _heavyDamageCnt = batFld "k.damage-heavy"
+                                , _fireCnt = batFld "l.hazards-fires-burning"
+                                , _electricHazardCnt = batFld "m.hazards-electric"
+                                , _waterHazardCnt = batFld "n.hazards-water"
+                                , _gasHazardCnt = batFld "o.hazards-gas"
+                                , _chemicalHazardCnt = batFld "p.hazards-chemical"
+                                , _roadBlocked = batFldB "q.roads-no-access" }
                     where batFld :: (Read a) => String -> Maybe a
                           batFld = fmap read . fld . (("12."++show n)++)
                           batFldR :: (Read a) => String -> Either FormatError a
@@ -98,7 +127,7 @@ instance ICS213.ICS213Body LADamageBody where
                                         Just "checked" -> Just True
                                         Just _ -> Just False
                                         otherwise -> Nothing
-                  nonEmpty m = E.isRight $ number m
+                  nonEmpty m = E.isRight $ m ^. number
   bodyToMsgFmt (LADamageBody s t) = MF.fromList list
     where notes = ("12.10.general-notes", T.unpack t)
           list = notes:concatMap statusToKV (zip s [0..])
@@ -106,7 +135,7 @@ instance ICS213.ICS213Body LADamageBody where
             where fldVal = fldVal' . truncateInput
                   mkBatStatusFields = map (("12."++show i)++) batStatusFields
                   truncateInput = dropWhile (not . isAlpha)
-                  fldVal' "a.batnum" = eitherToMaybe . fmap show $ number s
+                  fldVal' "a.batnum" = eitherToMaybe . fmap show $ s ^. number
                   fldVal' "b.ok" = boolFldToStr okay
                   fldVal' "c.people-minor" = intFldToStr minorInjuryCnt
                   fldVal' "d.people-delayed" = intFldToStr delayedInjuryCnt
@@ -124,8 +153,8 @@ instance ICS213.ICS213Body LADamageBody where
                   fldVal' "p.hazards-chemical" = intFldToStr chemicalHazardCnt
                   fldVal' "q.roads-no-access" = boolFldToStr roadBlocked
                   fldval' x =  Nothing
-                  intFldToStr f = show <$> f s
-                  boolFldToStr f = case f s of
+                  intFldToStr f = show <$> s ^. f
+                  boolFldToStr f = case s ^. f of
                                      Just True -> Just "checked"
                                      Just False -> Just ""
                                      _ -> Nothing
