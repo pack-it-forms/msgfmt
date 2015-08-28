@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module PackItForms.LADamageTests (laDamageTests) where
 
 import PackItForms.LADamage
@@ -22,7 +23,7 @@ prop_roundtrips m = m === ICS213.fromMsgFmt (ICS213.toMsgFmt m)
 instance Arbitrary LADamageBody where
   arbitrary = LADamageBody <$> resize 10 arbitrary <*> (T.pack <$> arbitrary)
 
-instance Arbitrary BATStatus where
+instance Arbitrary (BATStatus Update) where
   arbitrary = BATStatus <$> batno <*> arbitrary <*> arbitrary <*> arbitrary
                         <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
                         <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

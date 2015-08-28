@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RecordWildCards #-}
 {-|
 Module      : LADamage
 Description : Los Altos Damage Form Message Handling
@@ -17,6 +18,8 @@ forms, based on the ICS 213 message form handling support in
 
 module PackItForms.LADamage
        (LADamageBody(..)
+       ,Update
+       ,Accumulated
        ,BATStatus(..)
        ,number
        ,okay
@@ -48,29 +51,41 @@ import qualified Data.Text as T
 import qualified Data.Either as E
 import Control.Lens
 import Control.Lens.TH
+import Control.Arrow
 
 -- | ICS213 form body for the Los Altos Damage Assessment form
-data LADamageBody = LADamageBody { statuses :: [BATStatus]
+data LADamageBody = LADamageBody { statuses :: [BATStatus Update]
                                  , notes :: T.Text } deriving (Eq, Show)
 
--- | BATStatus represents the status information for a BAT
-data BATStatus = BATStatus { _number :: Either FormatError BATNum
-                            , _okay :: Maybe Bool
-                            , _minorInjuryCnt :: Maybe Integer
-                            , _delayedInjuryCnt :: Maybe Integer
-                            , _immediateInjuryCnt :: Maybe Integer
-                            , _fatalityCnt :: Maybe Integer
-                            , _missingCnt :: Maybe Integer
-                            , _trappedCnt :: Maybe Integer
-                            , _lightDamageCnt :: Maybe Integer
-                            , _moderateDamageCnt :: Maybe Integer
-                            , _heavyDamageCnt :: Maybe Integer
-                            , _fireCnt :: Maybe Integer
-                            , _electricHazardCnt :: Maybe Integer
-                            , _waterHazardCnt :: Maybe Integer
-                            , _gasHazardCnt :: Maybe Integer
-                            , _chemicalHazardCnt :: Maybe Integer
-                            , _roadBlocked :: Maybe Bool
+-- | A type to be used as the phantom type parameter for a 'BATStatus'
+-- representing that this status is an update.
+data Update
+-- | A type to be used as the phantom type parameter for a 'BATStatus'
+-- representing that this status is the accumulted,
+-- best-information-at-this-time, information for a BAT.
+data Accumulated
+
+-- | BATStatus represents the status information for a BAT; it is a
+-- phantom type, where the phantom type parameter represents whether a
+-- given 'BATStatus' is an incremental update on the state of a BAT or
+-- the accumulated, best-information-at-this-time status of a BAT.
+data BATStatus a = BATStatus { _number :: Either FormatError BATNum
+                             , _okay :: Maybe Bool
+                             , _minorInjuryCnt :: Maybe Integer
+                             , _delayedInjuryCnt :: Maybe Integer
+                             , _immediateInjuryCnt :: Maybe Integer
+                             , _fatalityCnt :: Maybe Integer
+                             , _missingCnt :: Maybe Integer
+                             , _trappedCnt :: Maybe Integer
+                             , _lightDamageCnt :: Maybe Integer
+                             , _moderateDamageCnt :: Maybe Integer
+                             , _heavyDamageCnt :: Maybe Integer
+                             , _fireCnt :: Maybe Integer
+                             , _electricHazardCnt :: Maybe Integer
+                             ,  _waterHazardCnt :: Maybe Integer
+                             , _gasHazardCnt :: Maybe Integer
+                             , _chemicalHazardCnt :: Maybe Integer
+                             , _roadBlocked :: Maybe Bool
      } deriving (Eq, Show)
 
 -- | A type alias for BAT numbers
@@ -164,13 +179,15 @@ instance ICS213.ICS213Body LADamageBody where
 -- number of the first BATStatus in the list is assumed to be the BAT
 -- for which statuses are being rolled up; if any other messages have
 -- a conflicting BAT number, they will be ignored.
-rollupBATStatuses :: [BATStatus] -> BATStatus
-rollupBATStatuses l = foldl1 addBATStatuses l
+rollupBATStatuses :: [BATStatus Update] -> BATStatus Accumulated
+rollupBATStatuses = toAcc . head &&& tail >>> uncurry (foldl addBATStatuses)
+  where toAcc :: BATStatus Update -> BATStatus Accumulated
+        toAcc BATStatus{..} = BATStatus{..}
 
 -- | Add one BAT status record into another; this is intended to be
 -- used for incremental updating of aggregate statuses.  The semantics
 -- are the same as for 'rollupBATStatuses' above.
-addBATStatuses :: BATStatus -> BATStatus -> BATStatus
+addBATStatuses :: BATStatus Accumulated -> BATStatus Update -> BATStatus Accumulated
 
 -- The implementation of 'addBATStatuses' folds over a list of fields
 -- in order to allow (nearly) boilerplate-free implementation, and the
@@ -183,12 +200,12 @@ addBATStatuses :: BATStatus -> BATStatus -> BATStatus
 -- advantage: by using existential types, it is possible to treat
 -- integer and boolean fields the same way, which makes the
 -- implementation of 'addBATStatuses' significantly simpler.
-data BATStatusLens = forall a. BSL (Lens' BATStatus (Maybe a))
+data BATStatusLens = forall b. BSL (forall a. Lens' (BATStatus a) (Maybe b))
 
 addBATStatuses old new = if old ^. number /= new ^. number
                             then old
-                            else foldl (\x -> \(BSL y) -> addFld x y) old flds
-  where addFld :: BATStatus -> Lens' BATStatus (Maybe a) -> BATStatus
+                            else foldl (\x (BSL y) -> addFld x y) old flds
+  where addFld :: BATStatus Accumulated -> (forall a. Lens' (BATStatus a) (Maybe b)) -> BATStatus Accumulated
         addFld s f = maybe s (\x -> s & f .~ Just x) $ new ^. f
         flds :: [BATStatusLens]
         flds = [ BSL okay, BSL minorInjuryCnt, BSL delayedInjuryCnt
