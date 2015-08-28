@@ -91,7 +91,42 @@ data BATStatus a = BATStatus { _number :: Either FormatError BATNum
 -- | A type alias for BAT numbers
 type BATNum = Integer
 
-makeLensesWith lensRules ''BATStatus
+-- Use explicit signatures to appease haddock
+makeLensesWith (lensRules & generateSignatures .~ False) ''BATStatus
+-- | Lens for the '_number' field of BATStatus
+number :: Lens' (BATStatus a) (Either FormatError BATNum)
+-- | Lens for the '_okay' field of BATStatus
+okay :: Lens' (BATStatus a) (Maybe Bool)
+-- | Lens for the '_minorInjuryCnt' field of BATStatus
+minorInjuryCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_delayedInjuryCnt' field of BATStatus
+delayedInjuryCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_immediateInjuryCnt' field of BATStatus
+immediateInjuryCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_fatalityCnt' field of BATStatus
+fatalityCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_missingCnt' field of BATStatus
+missingCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_trappedCnt' field of BATStatus
+trappedCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_lightDamageCnt' field of BATStatus
+lightDamageCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_moderateDamageCnt' field of BATStatus
+moderateDamageCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_heavyDamageCnt' field of BATStatus
+heavyDamageCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_fireCnt' field of BATStatus
+fireCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_electricHazardCnt' field of BATStatus
+electricHazardCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_waterHazardCnt' field of BATStatus
+waterHazardCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_gasHazardCnt' field of BATStatus
+gasHazardCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_chemicalHazardCnt' field of BATStatus
+chemicalHazardCnt :: Lens' (BATStatus a) (Maybe Integer)
+-- | Lens for the '_roadBlocked' field of BATStatus
+roadBlocked :: Lens' (BATStatus a) (Maybe Bool)
 
 batStatusFields = ["a.batnum"
                   ,"b.ok"
