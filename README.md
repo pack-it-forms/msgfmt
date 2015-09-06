@@ -7,7 +7,12 @@ processing form messages created with
 
 Usage Basics
 ============
-TDB
+
+For now there are no on-line user docs for this module.  The public
+parts of the interface are documented with haddock comments in the
+source code, and haddock can be used to generate web documentation
+from them.  When that generated documentation is made available online
+we will link to it here.
 
 Contributing
 ============
