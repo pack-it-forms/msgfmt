@@ -4,6 +4,8 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
+
 {-|
 Module      : LADamage
 Description : Los Altos Damage Form Message Handling
@@ -40,7 +42,30 @@ module PackItForms.LADamage
        ,roadBlocked
        ,BATNum(..)
        ,rollupBATStatuses
-       ,addBATStatuses) where
+       ,addBATStatuses
+       ,ZoneStatus
+       ,zoneNum
+       ,numBATs
+       ,okayCnt
+       ,minorInjurySum
+       ,delayedInjurySum
+       ,immediateInjurySum
+       ,fatalitySum
+       ,missingSum
+       ,trappedSum
+       ,lightDamageSum
+       ,moderateDamageSum
+       ,heavyDamageSum
+       ,fireSum
+       ,electricHazardSum
+       ,waterHazardSum
+       ,gasHazardSum
+       ,chemicalHazardSum
+       ,roadBlockedCnt
+       ,ZoneNum(..)
+       ,CoveredField(..)
+       ,ZoneMapping(..)
+       ,rollupZoneStatuses) where
 
 import Data.Char (isAlpha)
 import qualified Data.Map as M
@@ -52,6 +77,7 @@ import qualified Data.Either as E
 import Control.Lens
 import Control.Lens.TH
 import Control.Arrow
+import qualified Data.List as L
 
 -- | ICS213 form body for the Los Altos Damage Assessment form
 data LADamageBody = LADamageBody { statuses :: [BATStatus Update]
@@ -249,3 +275,119 @@ addBATStatuses old new = if old ^. number /= new ^. number
                , BSL heavyDamageCnt, BSL fireCnt, BSL electricHazardCnt
                , BSL waterHazardCnt, BSL gasHazardCnt, BSL chemicalHazardCnt
                , BSL roadBlocked]
+
+-- | A type alias for zone numbers
+type ZoneNum = Integer
+
+-- | A way of representing a field sum, along with an account of how
+-- many BATs have reported it.
+data CoveredField a = CoveredField Int a deriving (Eq, Show)
+
+data ZoneStatus = ZoneStatus { _zoneNum :: ZoneNum
+                             , _numBATs :: Int
+                             , _okayCnt :: CoveredField Integer
+                             , _minorInjurySum :: CoveredField Integer
+                             , _delayedInjurySum :: CoveredField Integer
+                             , _immediateInjurySum :: CoveredField Integer
+                             , _fatalitySum :: CoveredField Integer
+                             , _missingSum :: CoveredField Integer
+                             , _trappedSum :: CoveredField Integer
+                             , _lightDamageSum :: CoveredField Integer
+                             , _moderateDamageSum :: CoveredField Integer
+                             , _heavyDamageSum :: CoveredField Integer
+                             , _fireSum :: CoveredField Integer
+                             , _electricHazardSum :: CoveredField Integer
+                             , _waterHazardSum :: CoveredField Integer
+                             , _gasHazardSum :: CoveredField Integer
+                             , _chemicalHazardSum :: CoveredField Integer
+                             , _roadBlockedCnt :: CoveredField Integer
+                  } deriving (Eq, Show)
+
+makeLensesWith lensRules ''ZoneStatus
+
+-- | A mapping formalizing which BATs belong to which zones
+data ZoneMapping = ZM { zonesToBats :: M.Map ZoneNum [BATNum]
+                      , batsToZones :: M.Map BATNum ZoneNum
+                   } deriving (Eq, Show)
+
+-- Something like the BATStatusLens above, but which contains a lens
+-- for a BAT and one for a zone --- to be used when implementing
+-- rolling up BAT status reports into one zone status report.
+data ZoneStatusLens = forall b c. Summable b => ZSL (forall a. Lens' (BATStatus a) (Maybe b))
+                                                    (Lens' ZoneStatus (CoveredField Integer))
+
+emptyZoneStatus :: ZoneNum -> Int -> ZoneStatus
+emptyZoneStatus n b = ZoneStatus { _zoneNum = n
+                                 , _numBATs = b
+                                 , _okayCnt = CoveredField 0 0
+                                 , _minorInjurySum = CoveredField 0 0
+                                 , _delayedInjurySum = CoveredField 0 0
+                                 , _immediateInjurySum = CoveredField 0 0
+                                 , _fatalitySum = CoveredField 0 0
+                                 , _missingSum = CoveredField 0 0
+                                 , _trappedSum = CoveredField 0 0
+                                 , _lightDamageSum = CoveredField 0 0
+                                 , _moderateDamageSum = CoveredField 0 0
+                                 , _heavyDamageSum = CoveredField 0 0
+                                 , _fireSum = CoveredField 0 0
+                                 , _electricHazardSum = CoveredField 0 0
+                                 , _waterHazardSum = CoveredField 0 0
+                                 , _gasHazardSum = CoveredField 0 0
+                                 , _chemicalHazardSum = CoveredField 0 0
+                                 , _roadBlockedCnt = CoveredField 0 0
+                      }
+
+class Summable a where
+  sumIt :: a -> Integer -> Integer
+
+instance Summable Integer where
+  sumIt = (+)
+
+instance Summable Bool where
+  sumIt True x = x + 1
+  sumIt False x = x
+
+rollupZoneStatuses :: ZoneMapping -> [BATStatus Accumulated] -> M.Map ZoneNum ZoneStatus
+rollupZoneStatuses zm bsl = M.fromList groupedBATs
+  where groupedBATs = map (rollupZoneStatuses' . withKey) $ L.groupBy groupBats sortedBSL
+        -- The various partial functions below cannot fail, as failure
+        -- would require a missing BAT number or a missing entry in
+        -- the ZoneMapping, and BATs that satisfy either of those
+        -- conditions are filtered out of the list.
+        groupBats ((^.number) -> Right n1) ((^.number) -> Right n2) = z1 == z2
+          where z1 = M.lookup n1 (batsToZones zm)
+                z2 = M.lookup n2 (batsToZones zm)
+        withKey l@(((^.number) -> Right n1):_) = (batsToZones zm M.! n1,l)
+        sortedBSL = L.sortBy cmpZones (filter hasZone bsl)
+        cmpZones ((^.number) -> Right n1) ((^.number) -> Right n2) = compare n1 n2
+        hasZone x = either (const False) (`M.member` batsToZones zm) $ x ^. number
+        rollupZoneStatuses' :: (ZoneNum, [BATStatus Accumulated])
+                            -> (ZoneNum, ZoneStatus)
+        rollupZoneStatuses' (n,bs) = (n, rollupZoneStatuses'' n numBATs bs)
+          where numBATs = length $ zonesToBats zm M.! (batsToZones zm M.! n)
+        -- A private function for rolling up the zone statuses for a
+        -- single zone; the first Integer it the number of BATs in
+        -- this zone.  It is assumed that all of the BATs in the
+        -- provided list belong to the same zone, and that no two BAT
+        -- status reports are for the same BAT.  rollupZoneStatuses'
+        -- :: Integer -> [BATStatus Accumulated] -> ZoneStatus
+        rollupZoneStatuses'' :: ZoneNum -> Int -> [BATStatus Accumulated] -> ZoneStatus
+        rollupZoneStatuses'' n b = L.foldl' addZoneStatuses (emptyZoneStatus n b)
+        addZoneStatuses :: ZoneStatus -> BATStatus Accumulated -> ZoneStatus
+        addZoneStatuses z b = L.foldl' (addFld b) z flds
+        addFld :: BATStatus Accumulated -> ZoneStatus -> ZoneStatusLens -> ZoneStatus
+        addFld b z (ZSL bl zl) = maybe z (\x -> z & zl %~ addZ x) $ b ^. bl
+        addZ :: Summable b => b -> CoveredField Integer -> CoveredField Integer
+        addZ x (CoveredField n v) = CoveredField (n + 1) (sumIt x v)
+        flds = [ ZSL okay okayCnt, ZSL minorInjuryCnt minorInjurySum
+               , ZSL delayedInjuryCnt delayedInjurySum
+               , ZSL immediateInjuryCnt immediateInjurySum
+               , ZSL fatalityCnt fatalitySum, ZSL missingCnt missingSum
+               , ZSL trappedCnt trappedSum, ZSL lightDamageCnt lightDamageSum
+               , ZSL moderateDamageCnt moderateDamageSum
+               , ZSL heavyDamageCnt heavyDamageSum, ZSL fireCnt fireSum
+               , ZSL electricHazardCnt electricHazardSum
+               , ZSL waterHazardCnt waterHazardSum
+               , ZSL gasHazardCnt gasHazardSum
+               , ZSL chemicalHazardCnt chemicalHazardSum
+               , ZSL roadBlocked roadBlockedCnt ]
