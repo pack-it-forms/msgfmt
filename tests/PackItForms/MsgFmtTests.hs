@@ -13,30 +13,35 @@ import PackItForms.MsgFmt
 
 import Data.String.Utils
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 
 -- 1: Filename
 -- 2: Expected map
 -- return: Assertion checking that they are true
-packItFormsMsgFmtTest       :: String -> M.Map String String -> Assertion
-packItFormsMsgFmtTest fn em = do
+packItFormsMsgFmtTest       :: String
+                            -> M.Map String String
+                            -> M.Map String String
+                            -> Assertion
+packItFormsMsgFmtTest fn ee em = do
   let filename = "tests/PackItForms/data/msgs/" ++ fn
   c <- readFile filename
   let es = T.pack c
   let pfr = parse c
   es @=? getText pfr
-  let MsgFmt m s = pfr
+  let MsgFmt e m s = pfr
+  ee @=? e
   es @=? s
   em @=? m
   pfpfr <- parseFile filename
   es @=? getText pfpfr
-  let MsgFmt pfm pfs = pfpfr
+  let MsgFmt pfe pfm pfs = pfpfr
+  ee @=? pfe
   es @=? pfs
   em @=? pfm
 
 da01test :: TestTree
-da01test = testCase "Read form DA-01" $ packItFormsMsgFmtTest "DA-01" $
+da01test = testCase "Read form DA-01" $ packItFormsMsgFmtTest "DA-01" M.empty $
   M.fromList
     [ ("MsgNo","TST-42")
     , ("1a.","03/08/2014")
@@ -139,7 +144,7 @@ da01test = testCase "Read form DA-01" $ packItFormsMsgFmtTest "DA-01" $
     , ("Other","Packet") ]
 
 msg001test :: TestTree
-msg001test = testCase "Read form MSG001" $ packItFormsMsgFmtTest "MSG001" $
+msg001test = testCase "Read form MSG001" $ packItFormsMsgFmtTest "MSG001" M.empty $
   M.fromList
     [ ("MsgNo", "001")
     , ("1a.", "02/27/2014")
@@ -162,7 +167,7 @@ msg001test = testCase "Read form MSG001" $ packItFormsMsgFmtTest "MSG001" $
     ]
 
 ts01test :: TestTree
-ts01test = testCase "Read form TS01" $ packItFormsMsgFmtTest "TS01" $
+ts01test = testCase "Read form TS01" $ packItFormsMsgFmtTest "TS01" M.empty $
   M.fromList
     [ ("2.", "TIF2")
     , ("MsgNo", "SCC001")
@@ -201,7 +206,7 @@ ts01test = testCase "Read form TS01" $ packItFormsMsgFmtTest "TS01" $
     , ("OpTime", "2032") ]
 
 ts02test :: TestTree
-ts02test = testCase "Read form TS02" $ packItFormsMsgFmtTest "TS02" $
+ts02test = testCase "Read form TS02" $ packItFormsMsgFmtTest "TS02" M.empty $
   M.fromList
     [ ("2.", "TIF2")
     , ("MsgNo", "SCC001")
@@ -241,16 +246,17 @@ ts02test = testCase "Read form TS02" $ packItFormsMsgFmtTest "TS02" $
 
 emptytest :: TestTree
 emptytest = testCase "Parse empty form" $ do
-    let MsgFmt m s = parse ""
+    let MsgFmt e m s = parse ""
     "" @=? s
+    M.empty @=? e
     M.empty @=? m
 
--- The second part of a MsgFmt should be the Text version of what was passed in; this is an attempt to ensure that.
-secondPartIsInput :: TestTree
-secondPartIsInput = localOption (QuickCheckTests 5000) $
+-- The third part of a MsgFmt should be the Text version of what was passed in; this is an attempt to ensure that.
+thirdPartIsInput :: TestTree
+thirdPartIsInput = localOption (QuickCheckTests 5000) $
   testProperty "Second part of MsgFmt is input" $
     \s -> let pfr              = parse s
-              MsgFmt _ ns = pfr
+              MsgFmt _ _ ns = pfr
           in (getText pfr == ns) && (ns == T.pack s)
 
 verifyNonEmptyList :: [(String, String)] -> Bool
@@ -258,25 +264,36 @@ verifyNonEmptyList v = let ns = null . strip
                            vt = map (\(x,y) -> not (ns x || ns y)) v
                        in and vt
 
-generateAndParseAreInversesProperty :: [(String,String)] -> Property
-generateAndParseAreInversesProperty v = verifyInput v ==>
-  let MsgFmt gm gs = fromList v
-      MsgFmt em es = parse $ T.unpack gs
+newtype MsgInput = MsgInput ([(String, String)], [(String, String)]) deriving (Show, Eq)
+
+instance Arbitrary MsgInput where
+  arbitrary = do
+    e <- suchThat arbitrary validEnv
+    v <- suchThat arbitrary validFlds
+    return $ MsgInput (e, v)
+    where validEnv = all validEnv'
+          validEnv' (x, y) = and (map notElem "=,\n\r" <*> [x, y]) &&
+                             maybe False (\x -> x `notElem` (" \t"::String))
+                                   (listToMaybe x)
+          validFlds v = verifyNonEmptyList v && all (('\n'/=) . head . fst) v
+
+generateAndParseAreInversesProperty :: MsgInput -> Bool
+generateAndParseAreInversesProperty (MsgInput (e, v)) =
+  let MsgFmt ge gm gs = fromList e v
+      MsgFmt ee em es = parse $ T.unpack gs
   in (em == M.fromList (reverse v))
      && (gm == M.fromList v)
      && (es == gs)
-  -- Ensure that keys with a newline as the first character do not get
-  -- generated, and that there is at least one key-value pair.
-  where verifyInput v = verifyNonEmptyList v && all (('\n'/=) . head . fst) v
+     && (ee == ge)
 
 generateAndParseAreInverses :: TestTree
 generateAndParseAreInverses = localOption (QuickCheckTests 5000) $
   testProperty "Generate and parse act as inverses"
     generateAndParseAreInversesProperty
 
-getValueIsValueProperty :: [(String,String)] -> Property
-getValueIsValueProperty v = verifyNonEmptyList v ==>
-   let p = fromList v
+getValueIsValueProperty :: [(String, String)] -> [(String,String)] -> Property
+getValueIsValueProperty e v = verifyNonEmptyList v ==>
+   let p = fromList e v
    in all (\(x,y) -> (fromMaybe "" . getValue p) x == y)
           ((M.toList . M.fromList) v)
 
@@ -288,4 +305,4 @@ getValueIsValue = localOption (QuickCheckTests 5000) $
 packItFormsMsgFmtTests :: TestTree
 packItFormsMsgFmtTests = testGroup "Tests for PacFORMS representation parser"
   [ da01test, msg001test, ts01test, ts02test, emptytest,
-  secondPartIsInput, generateAndParseAreInverses, getValueIsValue ]
+  thirdPartIsInput, generateAndParseAreInverses, getValueIsValue ]

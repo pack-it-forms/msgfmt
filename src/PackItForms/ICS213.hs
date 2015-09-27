@@ -114,7 +114,7 @@ data CatchAllMapBody = CatchAllMapBody (M.Map String String) deriving (Eq, Show)
 instance ICS213Body CatchAllMapBody where
   bodyFromMsgFmt m = CatchAllMapBody $
     M.filterWithKey (\k _ -> not $ isICS213Field k) $ MF.getMap m
-  bodyToMsgFmt (CatchAllMapBody b) = MF.fromList (M.toList b)
+  bodyToMsgFmt (CatchAllMapBody b) = MF.fromList [] (M.toList b)
 
 
 -- | Footer contents of an ICS213 message
@@ -192,7 +192,7 @@ getErrors (Msg h b f) =
 
 fromMsgFmt :: ICS213Body a => MF.MsgFmt -> Msg a
 fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
-  where fromMsgFmtWithFldFns fld fldE fldR = Msg header body footer
+  where fromMsgFmtWithFldFns fld fldE fldR eFld = Msg header body footer
           where header = Header { stationRole = role
                                 , myMsgNo = fldR "MsgNo"
                                 , otherMsgNo = other

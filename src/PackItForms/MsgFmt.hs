@@ -18,12 +18,15 @@ module PackItForms.MsgFmt
 ( parse
 , parseFile
 , getValue
+, getEnvVal
 , getText
 , getMap
 , emptyRep
 , fromList
 , insertKV
+, insertEnvKV
 , insertAll
+, insertEnvAll
 , MsgFmt(..)
 ) where
 
@@ -34,33 +37,43 @@ import qualified Data.Text as T
 import Data.String.Utils
 
 -- | Representation of a message
-data MsgFmt = MsgFmt (M.Map String String) T.Text
-  deriving (Show, Eq)
+data MsgFmt = MsgFmt { envelope :: M.Map String String
+                     , fields :: M.Map String String
+                     , text ::  T.Text
+                     } deriving (Show, Eq)
 
 -- | Accessor for value for a field in the message
 getValue :: MsgFmt -> String -> Maybe String
-getValue (MsgFmt m _) k = M.lookup k m
+getValue (MsgFmt _ m _) k = M.lookup k m
 
 -- | Accessor for the encoded form message text
 getText :: MsgFmt -> T.Text
-getText (MsgFmt _ s) = s
+getText (MsgFmt _ _ s) = s
 
 -- | Accessor to allow access to all of the fields as a map
-getMap (MsgFmt m _) = m
+getMap (MsgFmt _ m _) = m
+
+-- | Accessor for the value of an envelope field
+getEnvVal :: MsgFmt -> String -> Maybe String
+getEnvVal (MsgFmt e _ _) k = M.lookup k e
 
 -- | Create an empty message
 emptyRep :: MsgFmt
-emptyRep = MsgFmt M.empty ""
+emptyRep = MsgFmt M.empty M.empty ""
 
--- | Create a message from a list of field key/value pairs
-fromList :: [(String, String)] -> MsgFmt
-fromList = insertAll emptyRep
+-- | Create a message from a list of field key/value pairs and a list of envelope key/value pairs
+fromList :: [(String, String)] -> [(String, String)] -> MsgFmt
+fromList e v = insertEnvAll (insertAll emptyRep v) e
 
 -- | Add a field key/value pair to a message
 insertKV :: MsgFmt -> String -> String ->  MsgFmt
-insertKV (MsgFmt m s) k v =
+insertKV (MsgFmt e m s) k v =
   let nis = encodeKV (quoteKey k) (quoteValue v)
-   in MsgFmt (M.insert k v m) (T.append s nis)
+   in MsgFmt e (M.insert k v m) (T.append s nis)
+
+-- | Add a key/value pair to a message envelope
+insertEnvKV :: MsgFmt -> String -> String -> MsgFmt
+insertEnvKV m k v = insertEnvAll m [(k, v)]
 
 -- Backtick escape invalid characters in encoded field names
 quoteKey :: String -> String
@@ -84,6 +97,26 @@ encodeKV k v = T.pack $ k ++ ": [" ++ v ++ "]\n"
 insertAll :: MsgFmt -> [(String, String)] -> MsgFmt
 insertAll = foldl $ uncurry . insertKV
 
+-- | Add a key/value pair to the envelope of the message
+insertEnvAll :: MsgFmt -> [(String, String)] -> MsgFmt
+insertEnvAll (MsgFmt e m s) kv =
+  let nEnv = M.union (M.fromList kv) e
+      lines' = lines . T.unpack $ s
+      ns = if any isEnvLine lines'
+              then T.pack . unlines . map (regenEnv nEnv) $ lines'
+              else T.pack . unlines . ((genEnv nEnv++"\n"):) $ lines'
+  in MsgFmt nEnv m ns
+  where regenEnv :: M.Map String String -> String -> String
+        regenEnv e s | isEnvLine s = genEnv e
+                     | otherwise = s
+        isEnvLine = startswith "!OUTPOST! "
+        genEnv :: M.Map String String -> String
+        genEnv e = "!OUTPOST! " ++ serializeEnv e
+        serializeEnv :: M.Map String String -> String
+        serializeEnv e = drop 2 $ M.foldrWithKey strEntry "" e
+        strEntry :: String -> String -> String -> String
+        strEntry k v s = s ++ ", " ++ k ++ "=" ++ v
+
 -- | Parse an encoded form message to a MsgFmt
 --
 -- Delimiters are considered :, [ and ].  : ends a key, [ starts a
@@ -94,7 +127,7 @@ insertAll = foldl $ uncurry . insertKV
 -- any characters between the colon that ends a key and the first
 -- unescaped begin bracket will be ignored.
 parse   :: String -> MsgFmt
-parse p = MsgFmt (parseMap M.empty "" $ stripUnnecessary p) $ T.pack p
+parse p = MsgFmt (parseEnv p) (parseMap M.empty "" $ stripUnnecessary p) $ T.pack p
 
 -- Skip comment and directive lines
 stripUnnecessary :: String -> String
@@ -116,6 +149,18 @@ parseMap parsed key string = if key == ""
   -- beginning of some keys
   where stripKey ('\n':xs) = xs
         stripKey x = x
+
+parseEnv :: String -> M.Map String String
+parseEnv msg = maybe M.empty parseEnvLine line
+  where line :: Maybe String
+        line = listToMaybe . filter (startswith "!OUTPOST! ") . lines $ msg
+        parseEnvLine :: String -> M.Map String String
+        parseEnvLine l = M.fromList . mapMaybe mkKV . split "," $ drop 10 l
+        mkKV :: String -> Maybe (String, String)
+        mkKV s = let strs = split "=" s
+                 in if length strs == 2
+                       then Just (lstrip $ head strs, strs !! 1)
+                       else Nothing
 
 -- Split keys from values
 splitEF :: Char -> String -> (String, String)

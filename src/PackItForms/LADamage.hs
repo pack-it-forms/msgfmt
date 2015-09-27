@@ -149,7 +149,7 @@ batStatusFields = ["a.batnum"
 
 instance ICS213.ICS213Body LADamageBody where
   bodyFromMsgFmt m = withFldFns m bodyFromMsgFmtWithFields
-    where bodyFromMsgFmtWithFields fld fldE fldR
+    where bodyFromMsgFmtWithFields fld fldE fldR eFld
             = LADamageBody (filter nonEmpty $ map mkBatStatus [0..9]) (T.pack $ fldE "12.10.general-notes")
             where mkBatStatus n
                     = BATStatus { _number = batFldR "a.batnum"
@@ -178,7 +178,7 @@ instance ICS213.ICS213Body LADamageBody where
                                         Just _ -> Just False
                                         otherwise -> Nothing
                   nonEmpty m = E.isRight $ m ^. number
-  bodyToMsgFmt (LADamageBody s t) = MF.fromList list
+  bodyToMsgFmt (LADamageBody s t) = MF.fromList [] list
     where notes = ("12.10.general-notes", T.unpack t)
           list = notes:concatMap statusToKV (zip s [0..])
           statusToKV (s, i) = foldr (genFlds fldVal) [] mkBatStatusFields
