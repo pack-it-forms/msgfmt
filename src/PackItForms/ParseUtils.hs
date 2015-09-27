@@ -17,7 +17,12 @@ import Data.Maybe (fromMaybe)
 import Control.Monad (liftM2)
 
 -- | Errors encountered while trying to create Msg
-data FormatError = MissingField String | FieldParseError String deriving (Show, Eq)
+data FormatError = MissingField String
+                 | FieldParseError String
+                 | AmbiguousRoleError (Maybe String) (Maybe String)
+                                      (Maybe String) (Maybe String)
+                                      (Maybe Bool)
+                 deriving (Show, Eq)
 
 -- | When parsing a form, it is often useful to be able to easily get
 -- the value of field after conversion to a number of types.  However,

@@ -1,0 +1,65 @@
+TAKE S: fld2 fld3 msgNo rcvno, B: rcvrcpt
+MAKE S: dir msgno othermsgno
+PROC r
+r:        BLANKP rcvno
+r1:        BLANKP fld2
+r11:        BLANKP fld3
+r111:        RET "Sent" msgNo UNKNOWN
+r110:        EQP fld3 msgNo
+r1101:        RET UNKNOWN UNKNOWN UNKNOWN
+r1100:        RET "Sent" msgNo fld3
+r10:        BLANKP fld3
+r101:        EQP fld2 msgNo
+r1011:        RET UNKNOWN UNKNOWN UNKNOWN
+r1010:        RET "Recv" msgNo fld2
+r100:        EQP fld2 msgNo
+r1001:        EQP fld3 msgNo
+r10011:        RET UNKNOWN UNKNOWN UNKNOWN
+r10010:        RET "Sent" msgNo fld3
+r1000:        EQP fld3 msgNo
+r10001:        RET "Recv" msgNo fld2
+r10000:        RET UNKNOWN UNKNOWN UNKNOWN
+r0:        TRUEP rcvrcpt
+r01:        BLANKP fld3
+r011:        EQP rcvno msgNo
+r0111:        RET UNKNOWN UNKNOWN UNKNOWN
+r0110:        BLANKP fld2
+r01101:        RET "Sent" msgNo rcvno
+r01100:        EQP fld2 msgNo
+r011001:        RET "Sent" msgNo rcvno
+r011000:        RET UNKNOWN UNKNOWN UNKNOWN
+r010:        EQP fld3 rcvno
+r0101:        EQP fld3 msgNo
+r01011:        RET UNKNOWN UNKNOWN UNKNOWN
+r01010:        BLANKP fld2
+r010101:        RET "Sent" msgNo rcvno
+r010100:        EQP fld2 msgNo
+r0101001:        RET "Sent" msgNo rcvno
+r0101000:        RET UNKNOWN UNKNOWN UNKNOWN
+r0100:        RET UNKNOWN UNKNOWN UNKNOWN
+r00:        BLANKP fld3
+r001:        EQP rcvno msgNo
+r0011:        BLANKP fld2
+r00111:        RET UNKNOWN UNKNOWN UNKNOWN
+r00110:        EQP fld2 msgNo
+r001101:        RET UNKNOWN UNKNOWN UNKNOWN
+r001100:        RET "Recv" rcvno fld2
+r0010:        BLANKP fld2
+r00101:        RET "Recv" rcvno msgNo
+r00100:        EQP fld2 msgNo
+r001001:        RET "Recv" rcvno msgNo
+r001000:        RET UNKNOWN UNKNOWN UNKNOWN
+r000:        EQP fld3 rcvno
+r0001:        EQP fld3 msgNo
+r00011:        BLANKP fld2
+r000111:        RET UNKNOWN UNKNOWN UNKNOWN
+r000110:        EQP fld2 msgNo
+r0001101:        RET UNKNOWN UNKNOWN UNKNOWN
+r0001100:        RET "Recv" rcvno fld2
+r00010:        BLANKP fld2
+r000101:        RET "Recv" rcvno msgNo
+r000100:        EQP fld2 msgNo
+r0001001:        RET "Recv" rcvno msgNo
+r0001000:        RET UNKNOWN UNKNOWN UNKNOWN
+r0000:        RET UNKNOWN UNKNOWN UNKNOWN
+END

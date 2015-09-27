@@ -6,6 +6,7 @@ module PackItForms.ICS213Tests (ics213Tests) where
 
 import Control.Lens.Traversal (sequenceOf)
 import Control.Lens.Each (each)
+import Control.Lens.Operators ((%~))
 import Control.Monad (liftM)
 import Data.Maybe (isNothing, isJust)
 import qualified Data.Fixed as F
@@ -14,6 +15,7 @@ import qualified Data.Set as S
 import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Data.Time.LocalTime (TimeOfDay(TimeOfDay))
 import PackItForms.ICS213
+import qualified PackItForms.MsgFmt as MF
 import PackItForms.ParseUtils
 import Test.QuickCheck
 import Test.Tasty
@@ -36,18 +38,21 @@ instance (Arbitrary a, ICS213Body a) => Arbitrary (Msg a) where
 
 instance Arbitrary Header where
   arbitrary = do
-    stationRole <- elements [Nothing, Just Sender, Just Receiver]
-    myMsgNo <- if isNothing stationRole
-                  then oneof [return . Left $ MissingField "MsgNo"
-                             ,liftM Right $ suchThat (resize 8 arbitrary) $
-                                                        not . null]
-                  else liftM Right $ suchThat (resize 8 arbitrary) $ not . null
-    otherMsgNo <- if isNothing stationRole
-                     then return Nothing
-                     else liftM Just $ suchThat (resize 8 arbitrary) $
-                                         \x -> either
-                                                 (const True)
-                                                 (/=x) myMsgNo && not (null x)
+    let isValidMsgNum :: String -> Bool
+        isValidMsgNum x = not (null x)
+                       && all (`notElem` ("=,\n\r"::String)) x
+        msgnum :: Gen MF.MsgNo
+        msgnum = suchThat (resize 8 arbitrary) isValidMsgNum
+    m <- msgnum
+    -- Ensure that otherMsgNo is != to myMsgNo
+    let othermsgnum :: Gen MF.MsgNo
+        othermsgnum = suchThat msgnum (/= m)
+    let myMsgNo = Right m
+    let sq2 (a, b) = a >>= (\a -> b >>= (\b -> return (a, b)))
+    (stationRole, otherMsgNo) <- oneof $ each %~ sq2 $
+      [(return $ Right Receiver, fmap Just othermsgnum)
+      ,(return $ Right Sender, fmap Just othermsgnum)
+      ,(return $ Right Sender, return Nothing)]
     formDate <- oneof [return . Left $ MissingField "1a."
                       ,return . Left $ FieldParseError "1a."
                       ,liftM Right arbitrary]

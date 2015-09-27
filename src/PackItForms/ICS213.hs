@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, GADTs, StandaloneDeriving #-}
+{-# LANGUAGE OverloadedStrings, GADTs, StandaloneDeriving, TemplateHaskell #-}
 
 {-|
 Module      : ICS213
@@ -22,7 +22,6 @@ module PackItForms.ICS213
        ,Header(..)
        ,Footer(..)
        ,StationRole(..)
-       ,MsgNo
        ,CallSign
        ,Severity(..)
        ,HandlingOrder(..)
@@ -44,6 +43,7 @@ import Data.Time.LocalTime (TimeOfDay)
 import Data.Time.Format (defaultTimeLocale, parseTimeM, formatTime)
 import qualified PackItForms.MsgFmt as MF
 import PackItForms.ParseUtils
+import Development.SDTPL
 
 -- This has show instances for Either
 import GHC.Show
@@ -56,9 +56,9 @@ deriving instance Eq a => Eq (Msg a)
 deriving instance Show a => Show (Msg a)
 
 -- | Header contents of an ICS213 message
-data Header = Header { stationRole :: Maybe StationRole
-                     , myMsgNo :: Either FormatError MsgNo
-                     , otherMsgNo :: Maybe MsgNo
+data Header = Header { stationRole :: Either FormatError StationRole
+                     , myMsgNo :: Either FormatError MF.MsgNo
+                     , otherMsgNo :: Maybe MF.MsgNo
                      , formDate :: Either FormatError Day
                      , formTime :: Either FormatError TimeOfDay
                      , severity :: Either FormatError Severity
@@ -76,14 +76,11 @@ data Header = Header { stationRole :: Maybe StationRole
                      , fromName :: Maybe String
                      , fromTelephone :: Maybe String
                      , subject :: Either FormatError String
-                     , reference :: Maybe MsgNo } deriving (Show, Eq)
+                     , reference :: Maybe MF.MsgNo } deriving (Show, Eq)
 
 -- | Role of the station in handling the message
 data StationRole = Sender | Receiver
   deriving (Show, Eq)
-
--- | Identifying number given to the message
-type MsgNo = String
 
 -- | Severity values for the message
 data Severity = Emergency | Urgent | OtherSeverity
@@ -190,12 +187,14 @@ getErrors (Msg h b f) =
                 , rr . handlingOrder, rr . toPosition, rr . toLocation
                 , rr . fromPosition, rr . fromLocation, rr . subject]
 
+$(compileSDTPL "calculateDirNums" "src/PackItForms/ics213msgfmt_sentreceived.sdtpl")
+
 fromMsgFmt :: ICS213Body a => MF.MsgFmt -> Msg a
 fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
   where fromMsgFmtWithFldFns fld fldE fldR eFld = Msg header body footer
-          where header = Header { stationRole = role
-                                , myMsgNo = fldR "MsgNo"
-                                , otherMsgNo = other
+          where header = Header { stationRole = toSR sdtpl_role
+                                , myMsgNo = toMMN sdtpl_msgno
+                                , otherMsgNo = sdtpl_othermsgno
                                 , formDate = formD
                                 , formTime = formT
                                 , severity = sev
@@ -231,17 +230,24 @@ fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
                                 , opName = fldR "OpName"
                                 , opDate = opD
                                 , opTime = opT}
-                role | isJust n && r == n = Just Receiver
-                     | isJust n && s == n = Just Sender
-                     | isJust s = Just Receiver
-                     | isJust r = Just Sender
-                     | otherwise = Nothing
-                   where s = fld "2."
-                         r = fld "3."
-                         n = fld "MsgNo"
-                other | role == Just Sender = fld "3."
-                      | role == Just Receiver = fld "2."
-                      | otherwise = Nothing
+                fld2 = fld "fld2"
+                fld3 = fld "fld3"
+                msgno = fld "MsgNo"
+                rcvno = eFld "RCVNO"
+                rcvrcpt = toBool <$> eFld "rcvrcpt"
+                sdtpl_role :: Maybe String
+                sdtpl_msgno :: Maybe String
+                sdtpl_othermsgno :: Maybe String
+                (sdtpl_role, sdtpl_msgno, sdtpl_othermsgno) =
+                  calculateDirNums fld2 fld3 msgno rcvno rcvrcpt
+                toSR (Just "Sent") = Right Sender
+                toSR (Just "Recv") = Right Receiver
+                toSR _ = Left $ AmbiguousRoleError msgno fld2 fld3 rcvno rcvrcpt
+                toBool "True" = True
+                toBool _ = False
+                toMMN (Just n) = Right n
+                toMMN Nothing = Left $ AmbiguousRoleError msgno fld2 fld3 rcvno rcvrcpt
+
                 formD = fldR "1a." >>= maybe (Left $ FieldParseError "1a.") Right
                                         . parseTimeM True defaultTimeLocale "%m/%d/%Y"
                 formT = fldR "1b." >>= \x -> case parseTimeM True defaultTimeLocale "%T" x of
@@ -286,13 +292,13 @@ fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
 
 -- | Test whether a message was recieved
 received :: Msg a -> Bool
-received m | stationRole h == Just Receiver = True
+received m | stationRole h == Right Receiver = True
            | isJust (otherMsgNo h) = True
            | otherwise = False
        where (Msg h _ _) = m
 
 toMsgFmt :: Msg a -> MF.MsgFmt
-toMsgFmt m@(Msg h b f) =  MF.insertAll body g2
+toMsgFmt m@(Msg h b f) =  MF.insertEnvAll (MF.insertAll body g2) env
   where locale = defaultTimeLocale
         g1 = foldr (genFlds ftrVal) [] footerFields
         ftrVal "OpTime" = eitherToMaybe $ liftM (formatTime locale "%T") (opTime f)
@@ -359,12 +365,21 @@ toMsgFmt m@(Msg h b f) =  MF.insertAll body g2
                         Right OtherSeverity -> Just "OTHER"
                         Left (FieldParseError _) -> Just ""
                         otherwise -> Nothing
-        hdrVal "3." = case stationRole h of
-                        Just Sender -> otherMsgNo h
-                        otherwise -> Nothing
-        hdrVal "MsgNo" = eitherToMaybe $ myMsgNo h
-        hdrVal "2." = case stationRole h of
-                        Just Receiver -> otherMsgNo h
-                        otherwise -> Nothing
+        hdrVal "MsgNo" = case stationRole h of
+                           Right Sender -> eitherToMaybe $ myMsgNo h
+                           Right Receiver -> otherMsgNo h
+                           otherwise -> Nothing
+        hdrVal "2." = Nothing
+        hdrVal "3." = Nothing
         hdrVal "1b." = eitherToMaybe $ liftM (formatTime locale "%T") (formTime h)
         hdrVal "1a." = eitherToMaybe $ liftM (formatTime locale "%m/%d/%Y") (formDate h)
+        env = foldr (genFlds envVal) [] ["RCVNO", "rcvrcpt"]
+        envVal "RCVNO" = case stationRole h of
+                           Right Sender -> otherMsgNo h
+                           Right Receiver -> eitherToMaybe $ myMsgNo h
+                           otherwise -> Nothing
+        envVal "rcvrcpt" = case stationRole h of
+                             Right Sender -> maybe Nothing (const $ Just "True")
+                                                   (otherMsgNo h)
+                             Right Receiver -> Nothing
+                             otherwise -> Nothing

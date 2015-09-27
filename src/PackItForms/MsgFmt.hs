@@ -28,6 +28,7 @@ module PackItForms.MsgFmt
 , insertAll
 , insertEnvAll
 , MsgFmt(..)
+, MsgNo(..)
 ) where
 
 import System.IO
@@ -35,6 +36,9 @@ import qualified Data.Map as M
 import Data.Maybe
 import qualified Data.Text as T
 import Data.String.Utils
+
+-- | Identifying number given to the message
+type MsgNo = String
 
 -- | Representation of a message
 data MsgFmt = MsgFmt { envelope :: M.Map String String
