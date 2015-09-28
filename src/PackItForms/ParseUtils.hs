@@ -29,7 +29,7 @@ data FormatError = MissingField String
 -- these functions are usually most useful if they can close over the
 -- 'PackItForms.MsgFmt.MsgFmt' being parsed, so that they only require
 -- one argument: the name of the field to extract.  This function
--- therefore takes a function of three parameters and passes in three
+-- therefore takes a function of six parameters and passes in six
 -- functions:
 --
 --   [@fld@] This function returns @'Just' value@ if the field exists,
@@ -42,6 +42,12 @@ data FormatError = MissingField String
 --   [@fldR@] This function returns @'Right' value@ if the field
 --   exists, and @'Left' $ 'MissingField' fldname@ if it doesn't; this
 --   function is intended to be used when the field is "required".
+--
+--   [@eFld@] Analogous to @fld@, but for envelope fields.
+--
+--   [@eFldE@] Analogous to @fldE@, but for envelope fields.
+--
+--   [@eFldR@] Analogous to @fldR@, but for envelope fields.
 withFldFns :: MF.MsgFmt
            -> ((String -> Maybe String)
             -> (String -> String)
