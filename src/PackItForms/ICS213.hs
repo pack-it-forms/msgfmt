@@ -191,7 +191,7 @@ $(compileSDTPL "calculateDirNums" "src/PackItForms/ics213msgfmt_sentreceived.sdt
 
 fromMsgFmt :: ICS213Body a => MF.MsgFmt -> Msg a
 fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
-  where fromMsgFmtWithFldFns fld fldE fldR eFld = Msg header body footer
+  where fromMsgFmtWithFldFns fld fldE fldR eFld _ eFldR = Msg header body footer
           where header = Header { stationRole = toSR sdtpl_role
                                 , myMsgNo = toMMN sdtpl_msgno
                                 , otherMsgNo = sdtpl_othermsgno

@@ -47,13 +47,17 @@ withFldFns :: MF.MsgFmt
             -> (String -> String)
             -> (String -> Either FormatError String)
             -> (String -> Maybe String)
+            -> (String -> String)
+            -> (String -> Either FormatError String)
             -> a)
            -> a
-withFldFns m f = f fld fldE fldR eFld
+withFldFns m f = f fld fldE fldR eFld eFldE eFldR
   where fld = MF.getValue m
         fldE = fromMaybe "" . fld
         fldR x = maybe (Left $ MissingField x) Right $ fld x
         eFld = MF.getEnvVal m
+        eFldE = fromMaybe "" . eFld
+        eFldR x = maybe (Left $ MissingField x) Right $ eFld x
 
 -- | When generating a message format, it is often useful to generate
 -- a list of keys and values from a number of form fields, as this

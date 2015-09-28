@@ -175,7 +175,7 @@ batStatusFields = ["a.batnum"
 
 instance ICS213.ICS213Body LADamageBody where
   bodyFromMsgFmt m = withFldFns m bodyFromMsgFmtWithFields
-    where bodyFromMsgFmtWithFields fld fldE fldR eFld
+    where bodyFromMsgFmtWithFields fld fldE fldR _ _ _
             = LADamageBody (filter nonEmpty $ map mkBatStatus [0..9]) (T.pack $ fldE "12.10.general-notes")
             where mkBatStatus n
                     = BATStatus { _number = batFldR "a.batnum"
