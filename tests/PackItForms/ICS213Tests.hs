@@ -33,7 +33,7 @@ instance (Arbitrary a, ICS213Body a) => Arbitrary (Msg a) where
   arbitrary = do
     h <- arbitrary
     b <- arbitrary
-    f <- arbitrary
+    f <- arbitraryFtr (stationRole h)
     return $ Msg h b f
 
 instance Arbitrary Header where
@@ -111,23 +111,38 @@ instance Arbitrary CatchAllMapBody where
          (suchThat (resize 20 arbitrary) (not . isICS213Field),
           resize 100 arbitrary))
 
-instance Arbitrary Footer where
-  arbitrary = do
-    actionTaken <- resize 100 arbitrary
-    ccDest <- arbitrary
-    commMethod <- oneof [return . Left $ MissingField "Method"
-                        ,liftM Right arbitrary]
-    opCall <- oneof [return .Left $ MissingField "OpCall"
-                    ,liftM Right $ suchThat (resize 8 arbitrary) $ not . null]
-    opName <- oneof [return . Left $ MissingField "OpName"
-                    ,liftM Right $ suchThat (resize 30 arbitrary) $ not . null]
-    opDate <- oneof [return . Left $ MissingField "OpDate"
-                    ,return . Left $ FieldParseError "OpDate"
-                    ,liftM Right arbitrary]
-    opTime <- oneof [return . Left $ MissingField "OpTime"
-                    ,return . Left $ FieldParseError "OpTime"
-                    ,liftM Right arbitrary]
-    return Footer{..}
+arbitraryFtr role = do
+  let err et f1 f2 = case role of
+                       Right Sender -> Left $ et f1
+                       Right Receiver -> Left $ et f2
+                       Left x -> Left x
+  actionTaken <- resize 100 arbitrary
+  ccDest <- arbitrary
+  commMethod <- oneof [return . Left $ MissingField "Method"
+                      ,liftM Right arbitrary]
+  opCall <- oneof [return $ err MissingField "OpCall" "ocall"
+                  ,liftM Right $ suchThat (resize 8 arbitrary) $ not . null]
+  opName <- oneof [return $ err MissingField "OpName" "oname"
+                  ,liftM Right $ suchThat (resize 30 arbitrary) $ not . null]
+  otherOpCall <- oneof [return Nothing
+                       ,liftM Just $ suchThat (resize 8 arbitrary) $ not . null]
+  otherOpName <- oneof [return Nothing
+                       ,liftM Just $ suchThat (resize 30 arbitrary) $ not . null]
+  opDate <- oneof [return $ err MissingField "OpDate" "ordate"
+                  ,return $ err FieldParseError "OpDate" "ordate"
+                  ,liftM Right arbitrary]
+  opTime <- oneof [return $ err MissingField "OpTime" "ortime"
+                  ,return $ err FieldParseError "OpTime" "ortime"
+                  ,liftM Right arbitrary]
+  otherOpDate <- oneof [return Nothing
+                       ,liftM Just arbitrary]
+  otherOpTime <- oneof [return Nothing
+                       ,liftM Just arbitrary]
+  bbsDate <- oneof [return Nothing
+                   ,liftM Just arbitrary]
+  bbsTime <- oneof [return Nothing
+                   ,liftM Just arbitrary]
+  return Footer{..}
 
 instance Arbitrary (S.Set CopyDest) where
   arbitrary = liftM S.fromList $

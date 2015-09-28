@@ -120,8 +120,14 @@ data Footer = Footer { actionTaken :: Maybe String
                      , commMethod :: Either FormatError CommMethod
                      , opCall :: Either FormatError CallSign
                      , opName :: Either FormatError String
+                     , otherOpCall :: Maybe CallSign
+                     , otherOpName :: Maybe String
                      , opDate :: Either FormatError Day
-                     , opTime :: Either FormatError TimeOfDay }
+                     , opTime :: Either FormatError TimeOfDay
+                     , otherOpDate :: Maybe Day
+                     , otherOpTime :: Maybe TimeOfDay
+                     , bbsDate :: Maybe Day
+                     , bbsTime :: Maybe TimeOfDay }
             deriving (Show, Eq)
 
 -- | Additional ICS destinations for copies of the message
@@ -192,11 +198,11 @@ $(compileSDTPL "calculateDirNums" "src/PackItForms/ics213msgfmt_sentreceived.sdt
 fromMsgFmt :: ICS213Body a => MF.MsgFmt -> Msg a
 fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
   where fromMsgFmtWithFldFns fld fldE fldR eFld _ eFldR = Msg header body footer
-          where header = Header { stationRole = toSR sdtpl_role
+          where header = Header { stationRole = role
                                 , myMsgNo = toMMN sdtpl_msgno
                                 , otherMsgNo = sdtpl_othermsgno
-                                , formDate = formD
-                                , formTime = formT
+                                , formDate = parseDateEither "1a." fldR
+                                , formTime = parseTimeEither "1b." fldR
                                 , severity = sev
                                 , handlingOrder = order
                                 , requestTakeAction = case fld "6a." of
@@ -226,10 +232,16 @@ fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
                 footer = Footer { actionTaken = fld "13."
                                 , ccDest = copies
                                 , commMethod = method
-                                , opCall = fldR "OpCall"
-                                , opName = fldR "OpName"
+                                , opCall = opC
+                                , opName = opN
+                                , otherOpCall = oOpC
+                                , otherOpName = oOpN
                                 , opDate = opD
-                                , opTime = opT}
+                                , opTime = opT
+                                , otherOpDate = oOpD
+                                , otherOpTime = oOpT
+                                , bbsDate = parseDateMaybe "odate" eFld
+                                , bbsTime = parseTimeMaybe "otime" eFld }
                 fld2 = fld "fld2"
                 fld3 = fld "fld3"
                 msgno = fld "MsgNo"
@@ -240,21 +252,13 @@ fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
                 sdtpl_othermsgno :: Maybe String
                 (sdtpl_role, sdtpl_msgno, sdtpl_othermsgno) =
                   calculateDirNums fld2 fld3 msgno rcvno rcvrcpt
-                toSR (Just "Sent") = Right Sender
-                toSR (Just "Recv") = Right Receiver
-                toSR _ = Left $ AmbiguousRoleError msgno fld2 fld3 rcvno rcvrcpt
+                role | sdtpl_role == Just "Sent" = Right Sender
+                     | sdtpl_role == Just "Recv" = Right Receiver
+                     | otherwise = Left $ AmbiguousRoleError msgno fld2 fld3 rcvno rcvrcpt
                 toBool "True" = True
                 toBool _ = False
                 toMMN (Just n) = Right n
                 toMMN Nothing = Left $ AmbiguousRoleError msgno fld2 fld3 rcvno rcvrcpt
-
-                formD = fldR "1a." >>= maybe (Left $ FieldParseError "1a.") Right
-                                        . parseTimeM True defaultTimeLocale "%m/%d/%Y"
-                formT = fldR "1b." >>= \x -> case parseTimeM True defaultTimeLocale "%T" x of
-                        Just t -> Right t
-                        Nothing -> case parseTimeM True defaultTimeLocale "%H:%M" x of
-                                     Just t -> Right t
-                                     Nothing -> Left $ FieldParseError "1b."
                 sev = fldR "4." >>= \x -> case x of
                                             "EMERGENCY" -> Right Emergency
                                             "URGENT" -> Right Urgent
@@ -282,14 +286,39 @@ fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
                                       ,("CCPlan", Planning)
                                       ,("CCLog", Logistics)
                                       ,("CCFin", Finance)]
-                opD = fldR "OpDate" >>= maybe (Left $ FieldParseError "OpDate") Right
-                                        . parseTimeM True defaultTimeLocale "%m/%d/%Y"
-                opT = fldR "OpTime" >>= \x -> case parseTimeM True defaultTimeLocale "%T" x of
-                        Just t -> Right t
-                        Nothing -> case parseTimeM True defaultTimeLocale "%H:%M" x of
-                                     Just t -> Right t
-                                     Nothing -> Left $ FieldParseError "OpTime"
+                (opC, opN, oOpC, oOpN, opD, opT, oOpD, oOpT) =
+                  case role of
+                    Right Sender -> (fldR "OpCall", fldR "OpName"
+                                    ,eFld "ocall", eFld "oname"
+                                    ,parseDateEither "OpDate" fldR
+                                    ,parseTimeEither "OpTime" fldR
+                                    ,parseDateMaybe "ordate" eFld
+                                    ,parseTimeMaybe "ortime" eFld)
+                    Right Receiver -> (eFldR "ocall", eFldR "oname"
+                                      ,fld "OpCall", fld "OpName"
+                                      ,parseDateEither "ordate" eFldR
+                                      ,parseTimeEither "ortime" eFldR
+                                      ,parseDateMaybe "OpDate" fld
+                                      ,parseTimeMaybe "OpTime" fld)
+                    Left x -> let l = Left x; ld = Left x; lt = Left x; n = Nothing
+                              in (l, l, n, n, ld, lt, n, n)
+                parseDate :: Monad m => m Day -> (Day -> m Day) -> String -> m Day
+                parseDate f s = maybe f s . parseTimeM True defaultTimeLocale "%m/%d/%Y"
+                parseDateEither f fn = fn f >>= parseDate (Left $ FieldParseError f) Right
+                parseDateMaybe f fn = fn f >>= parseDate Nothing Just
 
+                parseTime :: Monad m => m TimeOfDay
+                                    -> (TimeOfDay -> m TimeOfDay)
+                                    -> String
+                                    -> m TimeOfDay
+                parseTime f s x =
+                  case parseTimeM True defaultTimeLocale "%T" x of
+                    Just t -> s t
+                    Nothing -> case parseTimeM True defaultTimeLocale "%H:%M" x of
+                      Just t -> s t
+                      Nothing -> f
+                parseTimeEither f fn = fn f >>= parseTime (Left $ FieldParseError f) Right
+                parseTimeMaybe f fn = fn f >>= parseTime Nothing Just
 -- | Test whether a message was recieved
 received :: Msg a -> Bool
 received m | stationRole h == Right Receiver = True
@@ -301,10 +330,10 @@ toMsgFmt :: Msg a -> MF.MsgFmt
 toMsgFmt m@(Msg h b f) =  MF.insertEnvAll (MF.insertAll body g2) env
   where locale = defaultTimeLocale
         g1 = foldr (genFlds ftrVal) [] footerFields
-        ftrVal "OpTime" = eitherToMaybe $ liftM (formatTime locale "%T") (opTime f)
-        ftrVal "OpDate" = eitherToMaybe $ liftM (formatTime locale "%m/%d/%Y") (opDate f)
-        ftrVal "OpName" = eitherToMaybe $ opName f
-        ftrVal "OpCall" = eitherToMaybe $ opCall f
+        ftrVal "OpTime" = cSR (eitherToMaybe . fmtT $ opTime f) (fmtT $ otherOpTime f)
+        ftrVal "OpDate" = cSR (eitherToMaybe . fmtD $ opDate f) (fmtD $ otherOpDate f)
+        ftrVal "OpName" = cSR (eitherToMaybe $ opName f) (otherOpName f)
+        ftrVal "OpCall" = cSR (eitherToMaybe $ opCall f) (otherOpCall f)
         ftrVal "Other" = otherMethod $ commMethod f
           where otherMethod (Right (Other v)) = v
                 otherMethod _ = Nothing
@@ -371,9 +400,10 @@ toMsgFmt m@(Msg h b f) =  MF.insertEnvAll (MF.insertAll body g2) env
                            otherwise -> Nothing
         hdrVal "2." = Nothing
         hdrVal "3." = Nothing
-        hdrVal "1b." = eitherToMaybe $ liftM (formatTime locale "%T") (formTime h)
-        hdrVal "1a." = eitherToMaybe $ liftM (formatTime locale "%m/%d/%Y") (formDate h)
-        env = foldr (genFlds envVal) [] ["RCVNO", "rcvrcpt"]
+        hdrVal "1a." = eitherToMaybe . fmtD $ formDate h
+        hdrVal "1b." = eitherToMaybe . fmtT $ formTime h
+        env = foldr (genFlds envVal) [] ["RCVNO", "rcvrcpt", "ocall", "oname"
+                                        , "ordate", "ortime", "odate", "otime"]
         envVal "RCVNO" = case stationRole h of
                            Right Sender -> otherMsgNo h
                            Right Receiver -> eitherToMaybe $ myMsgNo h
@@ -383,3 +413,17 @@ toMsgFmt m@(Msg h b f) =  MF.insertEnvAll (MF.insertAll body g2) env
                                                    (otherMsgNo h)
                              Right Receiver -> Nothing
                              otherwise -> Nothing
+        envVal "ocall" = cSR (otherOpCall f) (eitherToMaybe $ opCall f)
+        envVal "oname" = cSR (otherOpName f) (eitherToMaybe $ opName f)
+        envVal "ordate" = cSR (fmtD $ otherOpDate f) (eitherToMaybe . fmtD $ opDate f)
+        envVal "ortime" = cSR (fmtT $ otherOpTime f) (eitherToMaybe . fmtT $ opTime f)
+        envVal "odate" = fmtD $ bbsDate f
+        envVal "otime" = fmtT $ bbsTime f
+        cSR fs fr = case stationRole h of
+                      Right Sender -> fs
+                      Right Receiver -> fr
+                      otherwise -> Nothing
+        fmtT :: Monad m => m TimeOfDay -> m String
+        fmtT = liftM (formatTime locale "%T")
+        fmtD :: Monad m => m Day -> m String
+        fmtD = liftM (formatTime locale "%m/%d/%Y")
