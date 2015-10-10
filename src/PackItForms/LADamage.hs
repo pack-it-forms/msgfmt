@@ -65,6 +65,11 @@ module PackItForms.LADamage
        ,ZoneNum(..)
        ,CoveredField(..)
        ,ZoneMapping(..)
+       ,empty
+       ,insert
+       ,zones
+       ,batsOfZone
+       ,zoneOfBAT
        ,rollupZoneStatuses) where
 
 import Data.Char (isAlpha)
@@ -309,6 +314,26 @@ makeLensesWith lensRules ''ZoneStatus
 data ZoneMapping = ZM { zonesToBats :: M.Map ZoneNum [BATNum]
                       , batsToZones :: M.Map BATNum ZoneNum
                    } deriving (Eq, Show)
+
+-- | Create an empty ZoneMapping
+empty :: ZoneMapping
+empty = ZM M.empty M.empty
+
+-- | Insert a zone/bat pair into a ZoneMapping
+insert :: ZoneMapping -> ZoneNum -> BATNum -> ZoneMapping
+insert (ZM z2b b2z) zn bn = ZM (M.insertWith (++) zn [bn] z2b) (M.insert bn zn b2z)
+
+-- | Get a list of zones
+zones :: ZoneMapping -> [ZoneNum]
+zones (ZM z2b _) = M.keys z2b
+
+-- | Get the zone associated with a BAT
+zoneOfBAT :: ZoneMapping -> BATNum  -> Maybe ZoneNum
+zoneOfBAT (ZM _ b2z) n = M.lookup n b2z
+
+-- | Get the BATs associated with a zone
+batsOfZone :: ZoneMapping -> ZoneNum -> Maybe [BATNum]
+batsOfZone (ZM z2b _) n = M.lookup n z2b
 
 -- Something like the BATStatusLens above, but which contains a lens
 -- for a BAT and one for a zone --- to be used when implementing
