@@ -245,7 +245,7 @@ fromMsgFmt m = withFldFns m fromMsgFmtWithFldFns
                 fld2 = fld "fld2"
                 fld3 = fld "fld3"
                 msgno = fld "MsgNo"
-                rcvno = eFld "RCVNO"
+                rcvno = eFld "RCVNUM"
                 rcvrcpt = toBool <$> eFld "rcvrcpt"
                 sdtpl_role :: Maybe String
                 sdtpl_msgno :: Maybe String
@@ -402,9 +402,9 @@ toMsgFmt m@(Msg h b f) =  MF.insertEnvAll (MF.insertAll body g2) env
         hdrVal "3." = Nothing
         hdrVal "1a." = eitherToMaybe . fmtD $ formDate h
         hdrVal "1b." = eitherToMaybe . fmtT $ formTime h
-        env = foldr (genFlds envVal) [] ["RCVNO", "rcvrcpt", "ocall", "oname"
+        env = foldr (genFlds envVal) [] ["RCVNUM", "rcvrcpt", "ocall", "oname"
                                         , "ordate", "ortime", "odate", "otime"]
-        envVal "RCVNO" = case stationRole h of
+        envVal "RCVNUM" = case stationRole h of
                            Right Sender -> otherMsgNo h
                            Right Receiver -> eitherToMaybe $ myMsgNo h
                            otherwise -> Nothing
