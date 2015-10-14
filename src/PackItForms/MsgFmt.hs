@@ -95,7 +95,7 @@ backtickQuote d = foldr step ""
 
 -- Encode a key/value pair in the text representation
 encodeKV     :: String -> String -> T.Text
-encodeKV k v = T.pack $ k ++ ": [" ++ v ++ "]\n"
+encodeKV k v = T.pack $ k ++ ": [" ++ v ++ "]\r\n"
 
 -- | Add a list of field key/value pairs to message
 insertAll :: MsgFmt -> [(String, String)] -> MsgFmt
@@ -151,7 +151,8 @@ parseMap parsed key string = if key == ""
                                      in M.insert key nv submap
   -- stripKey is used to get rid of the newline that might be at the
   -- beginning of some keys
-  where stripKey ('\n':xs) = xs
+  where stripKey ('\r':'\n':xs) = xs
+        stripKey ('\n':xs) = xs
         stripKey x = x
 
 parseEnv :: String -> M.Map String String
