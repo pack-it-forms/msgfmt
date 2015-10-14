@@ -159,47 +159,47 @@ chemicalHazardCnt :: Lens' (BATStatus a) (Maybe Integer)
 -- | Lens for the '_roadBlocked' field of BATStatus
 roadBlocked :: Lens' (BATStatus a) (Maybe Bool)
 
-batStatusFields = ["a.batnum"
-                  ,"b.ok"
-                  ,"c.people-minor"
-                  ,"d.people-delayed"
-                  ,"e.people-immediate"
-                  ,"f.people-V"
-                  ,"g.people-missing"
-                  ,"h.people-trapped"
-                  ,"i.damage-light"
-                  ,"j.damage-moderate"
-                  ,"k.damage-heavy"
-                  ,"l.hazards-fires-burning"
-                  ,"m.hazards-electric"
-                  ,"n.hazards-water"
-                  ,"o.hazards-gas"
-                  ,"p.hazards-chemical"
-                  ,"q.roads-no-access"]
+batStatusFields = ["a." -- batnum
+                  ,"b." -- ok
+                  ,"c." -- people-minor
+                  ,"d." -- people-delayed
+                  ,"e." -- people-immediate
+                  ,"f." -- people-V
+                  ,"g." -- people-missing
+                  ,"h." -- people-trapped
+                  ,"i." -- damage-light
+                  ,"j." -- damage-moderate
+                  ,"k." -- damage-heavy
+                  ,"l." -- hazards-fires-burning
+                  ,"m." -- hazards-electric
+                  ,"n." -- hazards-water
+                  ,"o." -- hazards-gas
+                  ,"p." -- hazards-chemical
+                  ,"q."]-- roads-no-access"
 
 
 instance ICS213.ICS213Body LADamageBody where
   bodyFromMsgFmt m = withFldFns m bodyFromMsgFmtWithFields
     where bodyFromMsgFmtWithFields fld fldE fldR _ _ _
-            = LADamageBody (filter nonEmpty $ map mkBatStatus [0..9]) (T.pack $ fldE "12.10.general-notes")
+            = LADamageBody (filter nonEmpty $ map mkBatStatus [0..9]) (T.pack $ fldE "12.10.")
             where mkBatStatus n
-                    = BATStatus { _number = batFldR "a.batnum"
-                                , _okay = batFldB "b.ok"
-                                , _minorInjuryCnt = batFld "c.people-minor"
-                                , _delayedInjuryCnt = batFld "d.people-delayed"
-                                , _immediateInjuryCnt = batFld "e.people-immediate"
-                                , _fatalityCnt = batFld "f.people-V"
-                                , _missingCnt = batFld "g.people-missing"
-                                , _trappedCnt = batFld "h.people-trapped"
-                                , _lightDamageCnt = batFld "i.damage-light"
-                                , _moderateDamageCnt = batFld "j.damage-moderate"
-                                , _heavyDamageCnt = batFld "k.damage-heavy"
-                                , _fireCnt = batFld "l.hazards-fires-burning"
-                                , _electricHazardCnt = batFld "m.hazards-electric"
-                                , _waterHazardCnt = batFld "n.hazards-water"
-                                , _gasHazardCnt = batFld "o.hazards-gas"
-                                , _chemicalHazardCnt = batFld "p.hazards-chemical"
-                                , _roadBlocked = batFldB "q.roads-no-access" }
+                    = BATStatus { _number = batFldR "a."
+                                , _okay = batFldB "b."
+                                , _minorInjuryCnt = batFld "c."
+                                , _delayedInjuryCnt = batFld "d."
+                                , _immediateInjuryCnt = batFld "e."
+                                , _fatalityCnt = batFld "f."
+                                , _missingCnt = batFld "g."
+                                , _trappedCnt = batFld "h."
+                                , _lightDamageCnt = batFld "i."
+                                , _moderateDamageCnt = batFld "j."
+                                , _heavyDamageCnt = batFld "k."
+                                , _fireCnt = batFld "l."
+                                , _electricHazardCnt = batFld "m."
+                                , _waterHazardCnt = batFld "n."
+                                , _gasHazardCnt = batFld "o."
+                                , _chemicalHazardCnt = batFld "p."
+                                , _roadBlocked = batFldB "q." }
                     where batFld :: (Read a) => String -> Maybe a
                           batFld = fmap read . fld . (("12."++show n)++)
                           batFldR :: (Read a) => String -> Either FormatError a
@@ -210,29 +210,29 @@ instance ICS213.ICS213Body LADamageBody where
                                         otherwise -> Nothing
                   nonEmpty m = E.isRight $ m ^. number
   bodyToMsgFmt (LADamageBody s t) = MF.fromList [] list
-    where notes = ("12.10.general-notes", T.unpack t)
+    where notes = ("12.10.", T.unpack t)
           list = notes:concatMap statusToKV (zip s [0..])
           statusToKV (s, i) = foldr (genFlds fldVal) [] mkBatStatusFields
             where fldVal = fldVal' . truncateInput
                   mkBatStatusFields = map (("12."++show i)++) batStatusFields
                   truncateInput = dropWhile (not . isAlpha)
-                  fldVal' "a.batnum" = eitherToMaybe . fmap show $ s ^. number
-                  fldVal' "b.ok" = boolFldToStr okay
-                  fldVal' "c.people-minor" = intFldToStr minorInjuryCnt
-                  fldVal' "d.people-delayed" = intFldToStr delayedInjuryCnt
-                  fldVal' "e.people-immediate" = intFldToStr immediateInjuryCnt
-                  fldVal' "f.people-V" = intFldToStr fatalityCnt
-                  fldVal' "g.people-missing" = intFldToStr missingCnt
-                  fldVal' "h.people-trapped" = intFldToStr trappedCnt
-                  fldVal' "i.damage-light" = intFldToStr lightDamageCnt
-                  fldVal' "j.damage-moderate" = intFldToStr moderateDamageCnt
-                  fldVal' "k.damage-heavy" = intFldToStr heavyDamageCnt
-                  fldVal' "l.hazards-fires-burning" = intFldToStr fireCnt
-                  fldVal' "m.hazards-electric" = intFldToStr electricHazardCnt
-                  fldVal' "n.hazards-water" = intFldToStr waterHazardCnt
-                  fldVal' "o.hazards-gas" = intFldToStr gasHazardCnt
-                  fldVal' "p.hazards-chemical" = intFldToStr chemicalHazardCnt
-                  fldVal' "q.roads-no-access" = boolFldToStr roadBlocked
+                  fldVal' "a." = eitherToMaybe . fmap show $ s ^. number
+                  fldVal' "b." = boolFldToStr okay
+                  fldVal' "c." = intFldToStr minorInjuryCnt
+                  fldVal' "d." = intFldToStr delayedInjuryCnt
+                  fldVal' "e." = intFldToStr immediateInjuryCnt
+                  fldVal' "f." = intFldToStr fatalityCnt
+                  fldVal' "g." = intFldToStr missingCnt
+                  fldVal' "h." = intFldToStr trappedCnt
+                  fldVal' "i." = intFldToStr lightDamageCnt
+                  fldVal' "j." = intFldToStr moderateDamageCnt
+                  fldVal' "k." = intFldToStr heavyDamageCnt
+                  fldVal' "l." = intFldToStr fireCnt
+                  fldVal' "m." = intFldToStr electricHazardCnt
+                  fldVal' "n." = intFldToStr waterHazardCnt
+                  fldVal' "o." = intFldToStr gasHazardCnt
+                  fldVal' "p." = intFldToStr chemicalHazardCnt
+                  fldVal' "q." = boolFldToStr roadBlocked
                   fldval' x =  Nothing
                   intFldToStr f = show <$> s ^. f
                   boolFldToStr f = case s ^. f of
