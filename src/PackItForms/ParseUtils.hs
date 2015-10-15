@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-|
 Module      : ParseUtils
 Description : Utilities for parsing messages
@@ -15,6 +17,8 @@ module PackItForms.ParseUtils
 import qualified PackItForms.MsgFmt as MF
 import Data.Maybe (fromMaybe)
 import Control.Monad (liftM2)
+import Data.Aeson (ToJSON)
+import GHC.Generics (Generic)
 
 -- | Errors encountered while trying to create Msg
 data FormatError = MissingField String
@@ -22,7 +26,9 @@ data FormatError = MissingField String
                  | AmbiguousRoleError (Maybe String) (Maybe String)
                                       (Maybe String) (Maybe String)
                                       (Maybe Bool)
-                 deriving (Show, Eq)
+                 deriving (Show, Eq, Generic)
+
+instance ToJSON FormatError where
 
 -- | When parsing a form, it is often useful to be able to easily get
 -- the value of field after conversion to a number of types.  However,

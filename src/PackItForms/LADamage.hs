@@ -5,6 +5,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 {-|
 Module      : LADamage
@@ -83,6 +85,8 @@ import Control.Lens
 import Control.Lens.TH
 import Control.Arrow
 import qualified Data.List as L
+import qualified Data.Aeson as A
+import GHC.Generics (Generic)
 
 -- | ICS213 form body for the Los Altos Damage Assessment form
 data LADamageBody = LADamageBody { statuses :: [BATStatus Update]
@@ -117,7 +121,7 @@ data BATStatus a = BATStatus { _number :: Either FormatError BATNum
                              , _gasHazardCnt :: Maybe Integer
                              , _chemicalHazardCnt :: Maybe Integer
                              , _roadBlocked :: Maybe Bool
-     } deriving (Eq, Show)
+     } deriving (Eq, Show, Generic)
 
 -- | A type alias for BAT numbers
 type BATNum = Integer
@@ -281,6 +285,8 @@ addBATStatuses old new = if old ^. number /= new ^. number
                , BSL waterHazardCnt, BSL gasHazardCnt, BSL chemicalHazardCnt
                , BSL roadBlocked]
 
+instance A.ToJSON (BATStatus a) where
+
 -- | A type alias for zone numbers
 type ZoneNum = Integer
 
@@ -306,7 +312,7 @@ data ZoneStatus = ZoneStatus { _zoneNum :: ZoneNum
                              , _gasHazardSum :: CoveredField Integer
                              , _chemicalHazardSum :: CoveredField Integer
                              , _roadBlockedCnt :: CoveredField Integer
-                  } deriving (Eq, Show)
+                  } deriving (Eq, Show, Generic)
 
 makeLensesWith lensRules ''ZoneStatus
 
@@ -416,3 +422,10 @@ rollupZoneStatuses zm bsl = M.fromList groupedBATs
                , ZSL gasHazardCnt gasHazardSum
                , ZSL chemicalHazardCnt chemicalHazardSum
                , ZSL roadBlocked roadBlockedCnt ]
+
+instance (A.ToJSON a ) => A.ToJSON (CoveredField a) where
+  toJSON (CoveredField nReportingBats value) =
+    A.object [ "value" A..= value
+             , "nReportingBats" A..= nReportingBats ]
+
+instance A.ToJSON ZoneStatus where
