@@ -389,7 +389,7 @@ rollupZoneStatuses zm bsl = M.fromList groupedBATs
         rollupZoneStatuses' :: (ZoneNum, [BATStatus Accumulated])
                             -> (ZoneNum, ZoneStatus)
         rollupZoneStatuses' (n,bs) = (n, rollupZoneStatuses'' n numBATs bs)
-          where numBATs = length $ zonesToBats zm M.! (batsToZones zm M.! n)
+          where numBATs = length $ zonesToBats zm M.! n
         -- A private function for rolling up the zone statuses for a
         -- single zone; the first Integer it the number of BATs in
         -- this zone.  It is assumed that all of the BATs in the
