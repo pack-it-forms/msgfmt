@@ -43,7 +43,7 @@ module PackItForms.LADamage
        ,BATNum(..)
        ,rollupBATStatuses
        ,addBATStatuses
-       ,ZoneStatus
+       ,ZoneStatus(..)
        ,zoneNum
        ,numBATs
        ,okayCnt
