@@ -1,8 +1,11 @@
 flags: {}
 packages:
 - '.'
+- location:
+    git: https://github.com/peter-sa/sdtpl.git
+    commit: 58464aadffa3216e1bdda2f6378d72adb9214d84
 extra-deps: []
-resolver: lts-3.0
+resolver: lts-4.1
 docker:
     enable: true
-    repo: "fpco/stack-ghcjs-build"
+    repo: "fpco/stack-build"
