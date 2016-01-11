@@ -66,7 +66,7 @@ complete the work.  However, the dynamic libraries in the container
 may not match those of the host.  You might be able to work around
 this by adding extra "-v" arguments to map the needed libraries into
 the container in the right place.  For example adding the following to
-~/stack/stack.yaml resolved the problem on one system we use:
+~/.stack/config.yaml resolved the problem on one system we use:
 
     docker:
       enable: false
