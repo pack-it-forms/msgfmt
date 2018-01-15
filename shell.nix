@@ -1,1 +1,2 @@
-(import ./release.nix).pack-it-forms-msgfmt.env
+{ args ? {} }:
+(import ./default.nix { inherit args; }).env
