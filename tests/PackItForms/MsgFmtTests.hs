@@ -2,12 +2,12 @@
 
 module PackItForms.MsgFmtTests (packItFormsMsgFmtTests) where
 
-import System.IO
+import System.IO()
 
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
-import Test.QuickCheck.Property
+import Test.Tasty.QuickCheck hiding (testcase)
+import Test.QuickCheck.Property()
 
 import PackItForms.MsgFmt
 
@@ -273,7 +273,7 @@ instance Arbitrary MsgInput where
     return $ MsgInput (e, v)
     where validEnv = all validEnv'
           validEnv' (x, y) = and (map notElem "=,\n\r" <*> [x, y]) &&
-                             maybe False (\x -> x `notElem` (" \t"::String))
+                             maybe False (\c -> c `notElem` (" \t"::String))
                                    (listToMaybe x)
           validFlds v = verifyNonEmptyList v && all (('\n'/=) . head . fst) v
 

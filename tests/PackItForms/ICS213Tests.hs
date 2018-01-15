@@ -93,10 +93,9 @@ instance Arbitrary Day where
 
 instance Arbitrary TimeOfDay where
   arbitrary = TimeOfDay <$> choose (0,23)
-                          <*> choose (0, 59) <*> arbitrary
+                          <*> choose (0, 59)
+                          <*> oneof (fmap (return . F.MkFixed) [0, 1*10^12..59*10^12])
 
-instance Arbitrary F.Pico where
-  arbitrary = liftM ((*10^12) . F.MkFixed) $ choose (0,59)
 
 instance Arbitrary Severity where
   arbitrary = elements [Emergency, Urgent, OtherSeverity]
@@ -144,9 +143,12 @@ arbitraryFtr role = do
                    ,liftM Just arbitrary]
   return Footer{..}
 
-instance Arbitrary (S.Set CopyDest) where
-  arbitrary = liftM S.fromList $
-                sublistOf [Management, Operations, Planning, Logistics, Finance]
+instance Arbitrary CopyDest where
+  arbitrary = oneof [return Management
+                    , return Operations
+                    , return Planning
+                    , return Logistics
+                    , return Finance]
 
 instance Arbitrary CommMethod where
   arbitrary = oneof [return Telephone
@@ -156,4 +158,3 @@ instance Arbitrary CommMethod where
                     ,return Courier
                     ,return AmateurRadio
                     ,liftM Other arbitrary]
-
