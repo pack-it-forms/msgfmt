@@ -10,11 +10,13 @@ self: super:
     fetch = super.nixpkgs.fetchFromGitHub;
   } { config = {}; };
 
-  sdtpl = self.releaseGHDevLocal {
-    owner = "peter-sa";
-    repo = "sdtpl";
-    rev = "TODO";
-    sha256 = "TODO";
-    local = ../sdtpl;
+  hsExtraDeps = {
+    sdtpl = self.releaseGHDevLocal {
+      owner = "peter-sa";
+      repo = "sdtpl";
+      rev = "TODO";
+      sha256 = "TODO";
+      local = ../sdtpl;
+    };
   };
 }
