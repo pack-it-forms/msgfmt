@@ -15,7 +15,7 @@ let
     release = false;
     releaseGHDevLocal =
        { owner, repo, rev, sha256, local
-       , ghPath ? ./., fetch ? self.nixpkgs.fetchFromGitHub }:
+       , ghPath ? /., fetch ? self.nixpkgs.fetchFromGitHub }:
          if self.release
           then import (fetch { inherit owner repo rev sha256; } + ghPath)
           else import local;
